@@ -1,0 +1,3 @@
+/* Place any global overrides that are not in App.css */
+.table-responsive { overflow-x: auto; }
+.cursor-pointer  { cursor: pointer; }
