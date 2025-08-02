@@ -200,7 +200,7 @@ const EmployeeList = () => {
     }
 
     try {
-      const response = await fetch('http://localhost:5000/api/auth/employee/create', {
+      const response = await fetch('https://cpms-4qh0.onrender.com/api/auth/employee/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -703,13 +703,13 @@ const EmployeeList = () => {
                   )}
                 </Form.Group>
 
-                <Alert variant="success">
-                  <i className="fas fa-info-circle me-2"></i>
-                  <strong>After account creation:</strong><br/>
-                  • Employee can login at: <code>http://localhost:3000/login</code><br/>
-                  • Use <strong>Employee tab</strong> with above credentials<br/>
-                  • Employee will have access to their assigned projects only
-                </Alert>
+                // <Alert variant="success">
+                //   <i className="fas fa-info-circle me-2"></i>
+                //   <strong>After account creation:</strong><br/>
+                //   • Employee can login at: <code>http://localhost:3000/login</code><br/>
+                //   • Use <strong>Employee tab</strong> with above credentials<br/>
+                //   • Employee will have access to their assigned projects only
+                // </Alert>
               </>
             )}
           </Modal.Body>
@@ -740,3 +740,4 @@ const EmployeeList = () => {
 };
 
 export default EmployeeList;
+
