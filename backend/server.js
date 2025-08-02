@@ -15,12 +15,39 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Enhanced CORS configuration
+// app.use(cors({
+//   origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
+//   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+//   allowedHeaders: ['Content-Type', 'Authorization', 'x-requested-with'],
+//   credentials: true
+// }));
+
+// set this line
+// Enhanced CORS configuration
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'https://cpms-frontend.onrender.com'
+];
+
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = `The CORS policy for this site does not allow access from ${origin}`;
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-requested-with'],
-  credentials: true
+  credentials: true,
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 }));
+
 
 // Handle preflight requests
 app.options('*', cors());
@@ -214,3 +241,4 @@ app.listen(PORT, () => {
   console.log(`   GET  http://localhost:${PORT}/api/messages`); // ADDED
   console.log(`   POST http://localhost:${PORT}/api/messages`); // ADDED
 });
+
