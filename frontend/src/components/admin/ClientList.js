@@ -231,7 +231,6 @@ const ClientList = () => {
           password: accountForm.password
         })
       });
-        // 🌐 Login URL: http://localhost:3000/login`);
 
       const result = await response.json();
       
@@ -240,6 +239,7 @@ const ClientList = () => {
         🏢 Company: ${selectedClient.companyName}
         📧 Email: ${accountForm.email}
         🔑 Password: ${accountForm.password}
+        🌐 Login URL: http://localhost:3000/login`);
         setShowAccountModal(false);
         fetchClients(); // Refresh client list
       } else {
@@ -705,13 +705,13 @@ const ClientList = () => {
                   )}
                 </Form.Group>
 
-                // <Alert variant="success">
-                //   <i className="fas fa-info-circle me-2"></i>
-                //   <strong>Client Portal Access:</strong><br/>
-                //   • Client can login at: <code>http://localhost:3000/login</code><br/>
-                //   • Use <strong>Client tab</strong> with above credentials<br/>
-                //   • Client will have access to their projects and payments only
-                // </Alert>
+                <Alert variant="success">
+                  <i className="fas fa-info-circle me-2"></i>
+                  <strong>Client Portal Access:</strong><br/>
+                  • Client can login at: <code>http://localhost:3000/login</code><br/>
+                  • Use <strong>Client tab</strong> with above credentials<br/>
+                  • Client will have access to their projects and payments only
+                </Alert>
               </>
             )}
           </Modal.Body>
@@ -742,4 +742,5 @@ const ClientList = () => {
 };
 
 export default ClientList;
+
 
