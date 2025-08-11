@@ -1,0 +1,4 @@
+"scripts": {
+  "build:all": "cd frontend && npm ci && npm run build && cd .. && rm -rf backend/build && cp -r frontend/build backend/",
+  "serve:dev": "npm run build:all && cd backend && npm run dev"
+}
