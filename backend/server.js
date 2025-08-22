@@ -111,20 +111,45 @@ app.get('/api/health', async (req, res) => {
 
 // ===== Serve React Frontend (FIXED) =====
 // Serve static files from React build
-const buildPath = path.join(__dirname, '../build'); // Assuming build is one level up
-console.log('📁 Frontend build path:', buildPath);
+// Try multiple possible build paths
+const possibleBuildPaths = [
+  path.join(__dirname, '../frontend/build'), // cpms/backend -> cpms/frontend/build
+  path.join(__dirname, '../build'),          // cpms/backend -> cpms/build
+  path.join(__dirname, 'build'),             // cpms/backend/build
+  path.join(__dirname, '../../frontend/build') // deeper nesting
+];
+
+let buildPath = null;
+const fs = require('fs');
+
+// Find the correct build path
+for (const testPath of possibleBuildPaths) {
+  if (fs.existsSync(testPath) && fs.existsSync(path.join(testPath, 'index.html'))) {
+    buildPath = testPath;
+    console.log('✅ Found build directory at:', buildPath);
+    break;
+  } else {
+    console.log('❌ Build not found at:', testPath);
+  }
+}
+
+if (!buildPath) {
+  console.warn('⚠️  No build directory found in any of the expected locations');
+  console.warn('⚠️  Searched paths:', possibleBuildPaths);
+  console.warn('⚠️  Make sure to run "npm run build" in your React app');
+  // Set a default path anyway
+  buildPath = path.join(__dirname, '../frontend/build');
+}
 
 // Check if build directory exists
-const fs = require('fs');
-if (fs.existsSync(buildPath)) {
-  console.log('✅ Build directory found');
+if (buildPath && fs.existsSync(buildPath)) {
+  console.log('✅ Build directory confirmed at:', buildPath);
   app.use(express.static(buildPath, {
     maxAge: '1y', // Cache static assets for 1 year
     etag: true
   }));
 } else {
-  console.warn('⚠️  Build directory not found at:', buildPath);
-  console.warn('⚠️  Make sure to run "npm run build" in your React app');
+  console.warn('⚠️  Final build directory check failed');
 }
 
 // ===== Catch-all handler for React Router (ALWAYS ENABLED) =====
@@ -135,17 +160,19 @@ app.get('*', (req, res, next) => {
     return next();
   }
   
-  const indexPath = path.join(buildPath, 'index.html');
+  const indexPath = buildPath ? path.join(buildPath, 'index.html') : null;
   
-  if (fs.existsSync(indexPath)) {
+  if (indexPath && fs.existsSync(indexPath)) {
     console.log('📄 Serving index.html for:', req.originalUrl);
     res.sendFile(indexPath);
   } else {
-    console.error('❌ index.html not found at:', indexPath);
+    console.error('❌ index.html not found. Build path:', buildPath);
+    console.error('❌ Index path:', indexPath);
     res.status(404).json({
       error: 'Frontend build not found',
       message: 'Please build the React app first',
-      buildPath: buildPath
+      searchedPaths: possibleBuildPaths,
+      currentBuildPath: buildPath
     });
   }
 });
