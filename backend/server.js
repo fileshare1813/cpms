@@ -109,19 +109,46 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// ===== Serve React Frontend =====
-const frontendPath = path.join(__dirname, 'build'); // build folder from React
-app.use(express.static(frontendPath));
+// ===== Serve React Frontend (FIXED) =====
+// Serve static files from React build
+const buildPath = path.join(__dirname, '../build'); // Assuming build is one level up
+console.log('📁 Frontend build path:', buildPath);
 
-if (process.env.NODE_ENV === 'production') {
-  const frontendPath = path.join(__dirname, 'build');
-  app.use(express.static(frontendPath));
-
-  // Catch-all route for SPA (React Router)
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(frontendPath, 'index.html'));
-  });
+// Check if build directory exists
+const fs = require('fs');
+if (fs.existsSync(buildPath)) {
+  console.log('✅ Build directory found');
+  app.use(express.static(buildPath, {
+    maxAge: '1y', // Cache static assets for 1 year
+    etag: true
+  }));
+} else {
+  console.warn('⚠️  Build directory not found at:', buildPath);
+  console.warn('⚠️  Make sure to run "npm run build" in your React app');
 }
+
+// ===== Catch-all handler for React Router (ALWAYS ENABLED) =====
+// This should be AFTER all API routes but BEFORE error handler
+app.get('*', (req, res, next) => {
+  // Skip API routes
+  if (req.originalUrl.startsWith('/api/')) {
+    return next();
+  }
+  
+  const indexPath = path.join(buildPath, 'index.html');
+  
+  if (fs.existsSync(indexPath)) {
+    console.log('📄 Serving index.html for:', req.originalUrl);
+    res.sendFile(indexPath);
+  } else {
+    console.error('❌ index.html not found at:', indexPath);
+    res.status(404).json({
+      error: 'Frontend build not found',
+      message: 'Please build the React app first',
+      buildPath: buildPath
+    });
+  }
+});
 
 // ===== Global Error Handler =====
 app.use((error, req, res, next) => {
@@ -146,4 +173,5 @@ process.on('SIGINT', async () => {
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`🌐 API URL: http://localhost:${PORT}`);
+  console.log(`📱 Frontend URL: http://localhost:${PORT}`);
 });
