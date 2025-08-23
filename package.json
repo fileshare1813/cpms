@@ -3,13 +3,11 @@
   "version": "1.0.0",
   "description": "Client & Project Management System - Full Stack",
   "scripts": {
-    "build": "cd frontend && npm install && npm run build",
+    "build": "cd frontend && npm install && npm run build && mkdir -p ../backend/build && cp -r build/* ../backend/build/",
     "start": "cd backend && npm install && npm start",
-    "dev": "cd backend && npm run dev",
-    "install-all": "cd frontend && npm install && cd ../backend && npm install",
-    "build-and-start": "npm run build && npm start"
+    "dev": "cd backend && npm run dev"
   },
-  "keywords": ["client-management", "project-management", "crm", "fullstack"],
-  "author": "Your Name",
-  "license": "MIT"
+  "engines": {
+    "node": ">=16.0.0"
+  }
 }
