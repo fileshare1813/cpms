@@ -32,6 +32,7 @@ const ClientList = () => {
     companyName: '',
     contactPerson: '',
     email: '',
+    password: '',
     phone: '',
     address: '',
     notes: '',
@@ -83,6 +84,7 @@ const ClientList = () => {
         companyName: client.companyName || '',
         contactPerson: client.contactPerson || '',
         email: client.email || '',
+        email: client.password || '',
         phone: client.phone || '',
         address: client.address || '',
         notes: client.notes || '',
@@ -96,6 +98,7 @@ const ClientList = () => {
         companyName: '',
         contactPerson: '',
         email: '',
+        password: '',
         phone: '',
         address: '',
         notes: '',
@@ -374,7 +377,10 @@ const ClientList = () => {
                             </small>
                           </td>
                           <td>{client.contactPerson}</td>
-                          <td>{client.email}</td>
+                          <td>
+                            <div className="fw-semibold">{client.email}</div>
+                            <small className="text-muted">{client.password || 'Not Set'}</small>
+                            </td>
                           <td>{client.phone}</td>
                           <td>{getStatusBadge(client.status)}</td>
                           <td>

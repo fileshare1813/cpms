@@ -82,43 +82,68 @@ const Reports = () => {
     }
   };
 
-  const exportReport = () => {
+const exportReport = () => {
+    // Excel-compatible HTML format
     const reportContent = `
-      CLIENT & PROJECT MANAGEMENT SYSTEM - REPORT
-      Generated on: ${moment().format('DD MMM YYYY, HH:mm')}
-      
-      SUMMARY STATISTICS:
-      - Total Clients: ${stats.totalClients}
-      - Total Employees: ${stats.totalEmployees}
-      - Total Projects: ${stats.totalProjects}
-      - Total Payments: ${stats.totalPayments}
-      - Total Messages: ${stats.totalMessages}
-      - Unread Messages: ${stats.unreadMessages}
-      
-      CLIENT DETAILS:
-      ${reportData.clients.map(client => 
-        `- ${client.companyName} (${client.clientId}) - ${client.status}`
-      ).join('\n')}
-      
-      EMPLOYEE DETAILS:
-      ${reportData.employees.map(employee => 
-        `- ${employee.name} (${employee.employeeId}) - ${employee.department} - ${employee.status}`
-      ).join('\n')}
-      
-      PROJECT DETAILS:
-      ${reportData.projects.map(project => 
-        `- ${project.projectName} (${project.projectId}) - ${project.status}`
-      ).join('\n')}
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+            th, td { border: 1px solid #000; padding: 5px; }
+            th { background-color: #f0f0f0; font-weight: bold; }
+          </style>
+        </head>
+        <body>
+          <h2>CLIENT & PROJECT MANAGEMENT SYSTEM - REPORT</h2>
+          <p>Generated on: ${moment().format('DD MMM YYYY, HH:mm')}</p>
+          
+          <h3>SUMMARY STATISTICS:</h3>
+          <table>
+            <tr><th>Metric</th><th>Count</th></tr>
+            <tr><td>Total Clients</td><td>${stats.totalClients}</td></tr>
+            <tr><td>Total Employees</td><td>${stats.totalEmployees}</td></tr>
+            <tr><td>Total Projects</td><td>${stats.totalProjects}</td></tr>
+            <tr><td>Total Payments</td><td>${stats.totalPayments}</td></tr>
+            <tr><td>Total Messages</td><td>${stats.totalMessages}</td></tr>
+            <tr><td>Unread Messages</td><td>${stats.unreadMessages}</td></tr>
+          </table>
+          
+          <h3>CLIENT DETAILS:</h3>
+          <table>
+            <tr><th>Company Name</th><th>Client ID</th><th>Status</th></tr>
+            ${reportData.clients.map(client => 
+              `<tr><td>${client.companyName}</td><td>${client.clientId}</td><td>${client.status}</td></tr>`
+            ).join('')}
+          </table>
+          
+          <h3>EMPLOYEE DETAILS:</h3>
+          <table>
+            <tr><th>Name</th><th>Employee ID</th><th>Department</th><th>Status</th></tr>
+            ${reportData.employees.map(employee => 
+              `<tr><td>${employee.name}</td><td>${employee.employeeId}</td><td>${employee.department}</td><td>${employee.status}</td></tr>`
+            ).join('')}
+          </table>
+          
+          <h3>PROJECT DETAILS:</h3>
+          <table>
+            <tr><th>Project Name</th><th>Project ID</th><th>Status</th></tr>
+            ${reportData.projects.map(project => 
+              `<tr><td>${project.projectName}</td><td>${project.projectId}</td><td>${project.status}</td></tr>`
+            ).join('')}
+          </table>
+        </body>
+      </html>
     `;
 
-    const blob = new Blob([reportContent], { type: 'text/plain' });
+    const blob = new Blob([reportContent], { type: 'application/vnd.ms-excel' });
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `CPMS_Report_${moment().format('YYYY-MM-DD')}.txt`;
+    link.download = `CPMS_Report_${moment().format('YYYY-MM-DD')}.xls`;
     link.click();
     window.URL.revokeObjectURL(url);
-  };
+};
 
   const getStatusBadge = (status, type = 'default') => {
     const variants = {
