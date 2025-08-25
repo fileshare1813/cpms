@@ -113,7 +113,7 @@ const Login = () => {
                       <h1 className="brand-logo">
                         <i className="fas fa-project-diagram me-2"></i>
                         CPMS
-                      </h1>
+                      </h1><sup>V3.o</sup>
                       <p className="text-muted">Choose your role and sign in</p>
                     </div>
 
