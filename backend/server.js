@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const path = require('path');
+const fs = require('fs');
 require('dotenv').config();
 
 // Import routes
@@ -10,21 +11,22 @@ const clientRoutes = require('./routes/clients');
 const employeeRoutes = require('./routes/employees');
 const projectRoutes = require('./routes/projects');
 const paymentRoutes = require('./routes/payments');
-const messageRoutes = require('./routes/messages'); // ADDED MESSAGE ROUTES
+const messageRoutes = require('./routes/messages');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ===== CORS Configuration =====
+// CORS Configuration
 const allowedOrigins = [
   'http://localhost:3000',
   'http://127.0.0.1:3000',
-  'https://cpms-frontend.onrender.com'
+  'https://cpms-frontend.onrender.com',
+  'https://cms.vibesoft.in'
 ];
 
 app.use(cors({
   origin: function (origin, callback) {
-    if (!origin) return callback(null, true); // allow mobile/postman etc.
+    if (!origin) return callback(null, true);
     if (allowedOrigins.indexOf(origin) === -1) {
       const msg = `The CORS policy for this site does not allow access from ${origin}`;
       return callback(new Error(msg), false);
@@ -37,58 +39,38 @@ app.use(cors({
   optionsSuccessStatus: 204
 }));
 
-// Handle preflight requests
 app.options('*', cors());
 
-// ===== Body Parsing Middleware =====
+// Body Parsing Middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// ===== Request Logging =====
-app.use((req, res, next) => {
-  console.log(`📨 ${req.method} ${req.originalUrl} - ${new Date().toISOString()}`);
-  next();
-});
-
-// ===== MongoDB Connection =====
+// MongoDB Connection
 const connectDB = async () => {
   try {
-    console.log('🔄 Connecting to MongoDB...');
-    console.log('📍 MongoDB URI:', process.env.MONGODB_URI ? 'URI Found' : 'URI Missing');
-    
-    const conn = await mongoose.connect(process.env.MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
+    await mongoose.connect(process.env.MONGODB_URI, {
       maxPoolSize: 10,
       serverSelectionTimeoutMS: 10000,
       socketTimeoutMS: 45000,
     });
 
-    console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
-    console.log(`📊 Database Name: ${conn.connection.name}`);
     await mongoose.connection.db.admin().ping();
-    console.log('🏓 MongoDB Ping: Success');
   } catch (error) {
-    console.error('❌ MongoDB Connection Error:', error.message);
+    console.error('MongoDB Connection Error:', error.message);
     process.exit(1);
   }
 };
 connectDB();
 
-// MongoDB Events
-mongoose.connection.on('connected', () => console.log('🟢 Mongoose connected to MongoDB'));
-mongoose.connection.on('error', (err) => console.error('🔴 Mongoose connection error:', err));
-mongoose.connection.on('disconnected', () => console.log('🟡 Mongoose disconnected from MongoDB'));
+// API Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/clients', clientRoutes);
+app.use('/api/employees', employeeRoutes);
+app.use('/api/projects', projectRoutes);
+app.use('/api/payments', paymentRoutes);
+app.use('/api/messages', messageRoutes);
 
-// ===== API Routes with Logging =====
-app.use('/api/auth', (req, res, next) => { console.log('🔐 Auth route accessed'); next(); }, authRoutes);
-app.use('/api/clients', (req, res, next) => { console.log('👥 Clients route accessed'); next(); }, clientRoutes);
-app.use('/api/employees', (req, res, next) => { console.log('👔 Employees route accessed'); next(); }, employeeRoutes);
-app.use('/api/projects', (req, res, next) => { console.log('📋 Projects route accessed'); next(); }, projectRoutes);
-app.use('/api/payments', (req, res, next) => { console.log('💳 Payments route accessed'); next(); }, paymentRoutes);
-app.use('/api/messages', (req, res, next) => { console.log('💌 Messages route accessed'); next(); }, messageRoutes);
-
-// ===== Health Check =====
+// Health Check
 app.get('/api/health', async (req, res) => {
   try {
     await mongoose.connection.db.admin().ping();
@@ -109,77 +91,57 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// ===== Serve React Frontend (FIXED) =====
-// Serve static files from React build
-// Try multiple possible build paths
+// Serve React Frontend
 const possibleBuildPaths = [
-  path.join(__dirname, '../frontend/build'), // cpms/backend -> cpms/frontend/build
-  path.join(__dirname, '../build'),          // cpms/backend -> cpms/build
-  path.join(__dirname, 'build'),             // cpms/backend/build
-  path.join(__dirname, '../../frontend/build') // deeper nesting
+  path.join(__dirname, '../frontend/build'),
+  path.join(__dirname, '../build'),
+  path.join(__dirname, 'build'),
+  path.join(__dirname, '../../frontend/build')
 ];
 
 let buildPath = null;
-const fs = require('fs');
 
 // Find the correct build path
 for (const testPath of possibleBuildPaths) {
   if (fs.existsSync(testPath) && fs.existsSync(path.join(testPath, 'index.html'))) {
     buildPath = testPath;
-    console.log('✅ Found build directory at:', buildPath);
     break;
-  } else {
-    console.log('❌ Build not found at:', testPath);
   }
 }
 
 if (!buildPath) {
-  console.warn('⚠️  No build directory found in any of the expected locations');
-  console.warn('⚠️  Searched paths:', possibleBuildPaths);
-  console.warn('⚠️  Make sure to run "npm run build" in your React app');
-  // Set a default path anyway
   buildPath = path.join(__dirname, '../frontend/build');
 }
 
-// Check if build directory exists
+// Serve static files
 if (buildPath && fs.existsSync(buildPath)) {
-  console.log('✅ Build directory confirmed at:', buildPath);
   app.use(express.static(buildPath, {
-    maxAge: '1y', // Cache static assets for 1 year
+    maxAge: '1y',
     etag: true
   }));
-} else {
-  console.warn('⚠️  Final build directory check failed');
 }
 
-// ===== Catch-all handler for React Router (ALWAYS ENABLED) =====
-// This should be AFTER all API routes but BEFORE error handler
+// Catch-all handler for React Router
 app.get('*', (req, res, next) => {
-  // Skip API routes
   if (req.originalUrl.startsWith('/api/')) {
     return next();
   }
-  
+
   const indexPath = buildPath ? path.join(buildPath, 'index.html') : null;
-  
+
   if (indexPath && fs.existsSync(indexPath)) {
-    console.log('📄 Serving index.html for:', req.originalUrl);
     res.sendFile(indexPath);
   } else {
-    console.error('❌ index.html not found. Build path:', buildPath);
-    console.error('❌ Index path:', indexPath);
     res.status(404).json({
       error: 'Frontend build not found',
-      message: 'Please build the React app first',
-      searchedPaths: possibleBuildPaths,
-      currentBuildPath: buildPath
+      message: 'Please build the React app first'
     });
   }
 });
 
-// ===== Global Error Handler =====
+// Global Error Handler
 app.use((error, req, res, next) => {
-  console.error('🚨 Global Error:', error);
+  console.error('Global Error:', error);
   res.status(500).json({
     success: false,
     message: 'Internal Server Error',
@@ -188,17 +150,17 @@ app.use((error, req, res, next) => {
   });
 });
 
-// ===== Graceful Shutdown =====
+// Graceful Shutdown
 process.on('SIGINT', async () => {
-  console.log('\n🛑 Shutting down gracefully...');
+  console.log('\nShutting down gracefully...');
   await mongoose.connection.close();
-  console.log('📊 MongoDB connection closed');
+  console.log('MongoDB connection closed');
   process.exit(0);
 });
 
-// ===== Start Server =====
+// Start Server
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`🌐 API URL: http://localhost:${PORT}`);
-  console.log(`📱 Frontend URL: http://localhost:${PORT}`);
+  console.log(`Server running on port ${PORT}`);
+  console.log(`API URL: http://localhost:${PORT}`);
+  console.log(`Frontend URL: http://localhost:${PORT}`);
 });

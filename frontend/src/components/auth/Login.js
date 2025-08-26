@@ -14,16 +14,16 @@ const Login = () => {
 
   // Debug useEffect
   useEffect(() => {
-    console.log('🚀 Login component loaded successfully!');
-    console.log('📋 Initial active tab:', activeTab);
+    // console.log('🚀 Login component loaded successfully!');
+    // console.log('📋 Initial active tab:', activeTab);
   }, []);
 
   useEffect(() => {
-    console.log('🔄 Active tab changed to:', activeTab);
+    // console.log('🔄 Active tab changed to:', activeTab);
   }, [activeTab]);
 
   const handleChange = (e) => {
-    console.log(`📝 Form field changed: ${e.target.name} = ${e.target.value}`);
+    // console.log(`📝 Form field changed: ${e.target.name} = ${e.target.value}`);
     setFormData({
       ...formData,
       [e.target.name]: e.target.value
@@ -32,14 +32,14 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('🔐 Login attempt:', { email: formData.email, role: activeTab });
+    // console.log('🔐 Login attempt:', { email: formData.email, role: activeTab });
     setLoading(true);
     setError('');
 
     const result = await login(formData.email, formData.password, activeTab);
     
     if (result.success) {
-      console.log('✅ Login successful, redirecting to:', activeTab);
+      // console.log('✅ Login successful, redirecting to:', activeTab);
       if (activeTab === 'admin') {
         navigate('/admin');
       } else if (activeTab === 'client') {
@@ -48,7 +48,7 @@ const Login = () => {
         navigate('/employee');
       }
     } else {
-      console.log('❌ Login failed:', result.message);
+      // console.log('❌ Login failed:', result.message);
       setError(result.message);
     }
     
@@ -56,7 +56,7 @@ const Login = () => {
   };
 
   const handleTabChange = (tab) => {
-    console.log('🔄 Tab changing from', activeTab, 'to', tab);
+    // console.log('🔄 Tab changing from', activeTab, 'to', tab);
     setActiveTab(tab);
     setFormData({ email: '', password: '' });
     setError('');
@@ -110,10 +110,10 @@ const Login = () => {
                 <Col md={6}>
                   <div className="login-form">
                     <div className="text-center mb-4">
-                      <h1 className="brand-logo">
+                      <h2 className="brand-logo">
                         <i className="fas fa-project-diagram me-2"></i>
-                        CPMS
-                      </h1>
+                        CMS
+                      </h2>
                       <p className="text-muted"><b>V3.0</b></p>
                       <p className="text-muted">Choose your role and sign in</p>
                     </div>
@@ -230,7 +230,7 @@ const Login = () => {
                           
                           <div className="help-text success">
                             <i className="fas fa-info-circle me-1"></i>
-                            <strong>Default:</strong> admin@company.com / admin123
+                            <strong>Check Out Now: <a href="https://vibesoft.in" target="_blank" rel="noopener noreferrer">VibeSoft</a></strong>
                           </div>
                         </div>
                       )}
@@ -257,7 +257,7 @@ const Login = () => {
                                 value={formData.email}
                                 onChange={handleChange}
                                 required
-                                placeholder="employee@company.com"
+                                placeholder="Enter employee email"
                               />
                             </Form.Group>
 
@@ -324,7 +324,7 @@ const Login = () => {
                                 value={formData.email}
                                 onChange={handleChange}
                                 required
-                                placeholder="client@company.com"
+                                placeholder="Enter client email"
                               />
                             </Form.Group>
 
@@ -372,7 +372,7 @@ const Login = () => {
 
                     <div className="text-center mt-4">
                       <small className="text-muted">
-                        © 2025 CPMS. All rights reserved.
+                        © 2025 CMS. All rights reserved VibeSoft.
                       </small>
                     </div>
                   </div>
