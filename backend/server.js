@@ -16,10 +16,16 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // ===== CORS Configuration =====
+// const allowedOrigins = [
+//   'http://localhost:3000',
+//   'http://127.0.0.1:3000',
+//   'https://cpms-frontend.onrender.com'
+// ];
 const allowedOrigins = [
   'http://localhost:3000',
   'http://127.0.0.1:3000',
-  'https://cpms-frontend.onrender.com'
+  'https://cpms-frontend.onrender.com',
+  'https://cms.vibesoft.in'
 ];
 
 app.use(cors({
@@ -202,3 +208,4 @@ app.listen(PORT, () => {
   console.log(`🌐 API URL: http://localhost:${PORT}`);
   console.log(`📱 Frontend URL: http://localhost:${PORT}`);
 });
+
