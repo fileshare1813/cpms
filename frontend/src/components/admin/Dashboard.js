@@ -72,7 +72,7 @@ const AdminDashboard = () => {
   };
 
   const renderContent = () => {
-    console.log('🎯 Rendering admin content for tab:', activeTab);
+    // console.log('🎯 Rendering admin content for tab:', activeTab);
     
     switch (activeTab) {
       case 'clients':

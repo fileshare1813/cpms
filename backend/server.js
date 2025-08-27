@@ -69,6 +69,8 @@ app.use('/api/employees', employeeRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/messages', messageRoutes);
+// new add
+app.use('/api/revenue', require('./routes/revenue'));
 
 // Health Check
 app.get('/api/health', async (req, res) => {
@@ -157,6 +159,9 @@ process.on('SIGINT', async () => {
   console.log('MongoDB connection closed');
   process.exit(0);
 });
+
+// Seeding function
+const { seedRevenueData } = require('./utils/seedRevenue');
 
 // Start Server
 app.listen(PORT, () => {
