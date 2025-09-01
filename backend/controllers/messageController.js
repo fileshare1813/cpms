@@ -3,6 +3,59 @@ const User = require('../models/User');
 const Client = require('../models/Client');
 const mongoose = require('mongoose');
 
+// Helper function to find client user
+const findClientUser = async (clientId) => {
+  try {
+    console.log('🔍 Finding user for client ID:', clientId);
+    
+    // Method 1: Client has direct user reference
+    const clientWithUser = await Client.findById(clientId).populate('user', '_id');
+    if (clientWithUser && clientWithUser.user) {
+      console.log('✅ Method 1: Found user via client.user field');
+      return clientWithUser.user._id;
+    }
+    
+    // Method 2: Find user by clientId field  
+    const userByClientId = await User.findOne({ 
+      clientId: clientId,
+      role: 'client'
+    });
+    if (userByClientId) {
+      console.log('✅ Method 2: Found user via clientId field');
+      return userByClientId._id;
+    }
+    
+    // Method 3: Find user by clientInfo._id
+    const userByClientInfo = await User.findOne({ 
+      'clientInfo._id': mongoose.Types.ObjectId(clientId),
+      role: 'client'
+    });
+    if (userByClientInfo) {
+      console.log('✅ Method 3: Found user via clientInfo._id');
+      return userByClientInfo._id;
+    }
+    
+    // Method 4: Find by email matching
+    const client = await Client.findById(clientId);
+    if (client && client.email) {
+      const userByEmail = await User.findOne({ 
+        email: client.email, 
+        role: 'client' 
+      });
+      if (userByEmail) {
+        console.log('✅ Method 4: Found user via email matching');
+        return userByEmail._id;
+      }
+    }
+    
+    console.log('❌ No user found for client ID:', clientId);
+    return null;
+  } catch (error) {
+    console.error('❌ Error in findClientUser:', error);
+    return null;
+  }
+};
+
 // GET /api/messages - Get all messages with filters (ADMIN FIXED)
 const getAllMessages = async (req, res) => {
   try {
@@ -16,7 +69,7 @@ const getAllMessages = async (req, res) => {
       search = ''
     } = req.query;
 
-    console.log('🔄 Getting all messages with params:', { 
+    console.log('📄 Getting all messages with params:', { 
       page, limit, clientId, status, messageType, 
       userRole: req.user.role,
       userId: req.user._id
@@ -124,7 +177,7 @@ const getAllMessages = async (req, res) => {
   }
 };
 
-// POST /api/messages - Send new message (ENHANCED)
+// POST /api/messages - Send new message (ENHANCED FOR EMPLOYEE-CLIENT MESSAGING)
 const sendMessage = async (req, res) => {
   try {
     const {
@@ -137,13 +190,15 @@ const sendMessage = async (req, res) => {
       priority = 'medium'
     } = req.body;
 
-    console.log('🔄 Sending new message:', { 
+    console.log('📄 Sending new message:', { 
       sender: req.user._id, 
       senderRole: req.user.role,
       recipient, 
       subject, 
       messageType,
-      clientId: req.user.clientId
+      clientId: req.user.clientId,
+      employeeId: req.user.employeeId,
+      clientParam: client
     });
 
     // Validation
@@ -161,13 +216,13 @@ const sendMessage = async (req, res) => {
       });
     }
 
-    // Auto-determine recipient if not provided (client sending to admin)
+    // Auto-determine recipient if not provided
     let recipientId = recipient;
     
     if (!recipientId || !mongoose.Types.ObjectId.isValid(recipientId)) {
-      if (req.user.role === 'client') {
-        // Find the first available admin user
-        console.log('🔍 Looking for admin user...');
+      // For CLIENT and EMPLOYEE sending to ADMIN
+      if ((req.user.role === 'client' || req.user.role === 'employee') && !client) {
+        console.log(`🔍 Looking for admin user for ${req.user.role}...`);
         const adminUser = await User.findOne({ 
           role: 'admin'
         }).select('_id name email');
@@ -190,14 +245,38 @@ const sendMessage = async (req, res) => {
       }
     }
 
-    // Verify recipient exists and is valid ObjectId
-    if (!mongoose.Types.ObjectId.isValid(recipientId)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid recipient ID format'
-      });
+    // Handle special case where frontend couldn't find client user
+    if (recipientId === 'CLIENT_USER_TO_BE_FOUND' && client) {
+      console.log('🔍 Backend: Finding client user for client ID:', client);
+      const clientUserId = await findClientUser(client);
+      if (clientUserId) {
+        recipientId = clientUserId;
+        console.log('✅ Backend: Found client user:', recipientId);
+      } else {
+        return res.status(404).json({
+          success: false,
+          message: 'Client user account not found. Please contact admin to create a user account for this client.'
+        });
+      }
     }
 
+    // If client ID is provided (employee messaging client), find client's user
+    if (client && mongoose.Types.ObjectId.isValid(client)) {
+      console.log('🔍 Finding client user for client ID:', client);
+      const clientUserId = await findClientUser(client);
+      
+      if (clientUserId) {
+        recipientId = clientUserId;
+        console.log('✅ Found client user ID:', recipientId);
+      } else {
+        return res.status(404).json({
+          success: false,
+          message: 'Client user not found or client does not have a user account'
+        });
+      }
+    }
+
+    // Verify recipient exists
     const recipientUser = await User.findById(recipientId);
     if (!recipientUser) {
       return res.status(404).json({
@@ -206,28 +285,19 @@ const sendMessage = async (req, res) => {
       });
     }
 
-    // Determine client ID
-    let clientId = client;
+    // Determine client ID for message
+    let clientIdForMessage = client;
     if (req.user.role === 'client' && req.user.clientId) {
-      clientId = req.user.clientId;
-      console.log('🏢 Using client ID from user:', clientId);
+      clientIdForMessage = req.user.clientId;
+      console.log('🏢 Using client ID from user:', clientIdForMessage);
     }
 
-    // Validate project ID if provided
-    if (project && !mongoose.Types.ObjectId.isValid(project)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid project ID format'
-      });
-    }
-
-    console.log('📝 Creating message with data:', {
+    console.log('🔨 Creating message with data:', {
       sender: req.user._id,
       senderRole: req.user.role,
       recipient: recipientId,
       recipientRole: recipientUser.role,
-      client: clientId,
-      project,
+      client: clientIdForMessage,
       subject: subject.trim(),
       messageType,
       priority
@@ -237,7 +307,7 @@ const sendMessage = async (req, res) => {
     const newMessage = new Message({
       sender: req.user._id,
       recipient: recipientId,
-      client: clientId,
+      client: clientIdForMessage || undefined,
       project: project || undefined,
       subject: subject.trim(),
       message: message.trim(),
@@ -273,14 +343,6 @@ const sendMessage = async (req, res) => {
         success: false,
         message: 'Validation failed',
         errors: validationErrors
-      });
-    }
-    
-    // Handle cast errors (invalid ObjectId)
-    if (error.name === 'CastError') {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid ID format provided'
       });
     }
     
@@ -472,7 +534,7 @@ const replyMessage = async (req, res) => {
 // GET /api/messages/stats - Get message statistics
 const getMessageStats = async (req, res) => {
   try {
-    console.log('🔄 Getting message statistics for user:', req.user.role, req.user._id);
+    console.log('📄 Getting message statistics for user:', req.user.role, req.user._id);
 
     let filter = {};
     
@@ -544,14 +606,18 @@ const getMessageStats = async (req, res) => {
   }
 };
 
-// GET /api/messages/admin-users - Get admin users for client messaging
+// GET /api/messages/admin-users - Get admin users for messaging
 const getAdminUsers = async (req, res) => {
   try {
+    console.log('🔍 Getting admin users...');
+    
     const adminUsers = await User.find({ 
       role: 'admin'
     })
     .select('_id name email')
     .limit(10);
+
+    console.log(`✅ Found ${adminUsers.length} admin users`);
 
     res.json({
       success: true,
@@ -567,6 +633,7 @@ const getAdminUsers = async (req, res) => {
   }
 };
 
+// Export all functions
 module.exports = { 
   getAllMessages, 
   getMessageById, 

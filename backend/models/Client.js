@@ -6,6 +6,11 @@ const clientSchema = new mongoose.Schema({
     unique: true,
     // REMOVED: required: true - Let pre-save middleware handle this
   },
+  user: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
   companyName: { 
     type: String, 
     required: [true, 'Company name is required'],

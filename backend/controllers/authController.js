@@ -350,43 +350,32 @@ const createEmployeeUser = async (req, res) => {
 // Change Password
 const changePassword = async (req, res) => {
   try {
-    const { currentPassword, newPassword } = req.body;
+    const { newPassword } = req.body;  // currentPassword hata diya
     const userId = req.user._id;
 
-    // Validation
-    if (!currentPassword || !newPassword) {
-      return res.status(400).json({ message: 'Current password and new password are required' });
-    }
-
-    if (newPassword.length < 6) {
+    if (!newPassword || newPassword.length < 6) {
       return res.status(400).json({ message: 'New password must be at least 6 characters long' });
     }
 
-    // Find user
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Check current password
-    const isMatch = await user.comparePassword(currentPassword);
-    if (!isMatch) {
-      return res.status(400).json({ message: 'Current password is incorrect' });
+    // Optional: Only admin allowed
+    if (user.role !== 'admin') {
+      return res.status(403).json({ message: 'Only admin can change password here' });
     }
 
-    // Update password
     user.password = newPassword;
     await user.save();
 
-    res.json({
-      success: true,
-      message: 'Password changed successfully'
-    });
+    res.json({ message: 'Password changed successfully' });
   } catch (error) {
-    console.error('Change password error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
+
 
 // Get Current User Profile
 const getCurrentUser = async (req, res) => {

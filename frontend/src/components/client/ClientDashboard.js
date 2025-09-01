@@ -6,117 +6,115 @@ import { toast } from 'react-toastify';
 import moment from 'moment';
 
 const ClientDashboard = () => {
-  const { user, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState('overview');
-  const [projects, setProjects] = useState([]);
-  const [payments, setPayments] = useState([]);
-  const [messages, setMessages] = useState([]);
-  const [loading, setLoading] = useState({
-    projects: false,
-    payments: false,
-    messages: false,
-    sendingMessage: false
-  });
+const { user, logout } = useAuth();
+const [activeTab, setActiveTab] = useState('overview');
+const [projects, setProjects] = useState([]);
+const [payments, setPayments] = useState([]);
+const [messages, setMessages] = useState([]);
+const [loading, setLoading] = useState({
+projects: false,
+payments: false,
+messages: false,
+sendingMessage: false
+});
 
   // Message Modal States
-  const [showMessageModal, setShowMessageModal] = useState(false);
-  const [showViewModal, setShowViewModal] = useState(false);
-  const [showReplyModal, setShowReplyModal] = useState(false);
-  const [selectedMessage, setSelectedMessage] = useState(null);
-  const [replyText, setReplyText] = useState('');
-  const [messageForm, setMessageForm] = useState({
-    subject: '',
-    message: '',
-    messageType: 'general',
-    priority: 'medium'
-  });
+const [showMessageModal, setShowMessageModal] = useState(false);
+const [showViewModal, setShowViewModal] = useState(false);
+const [showReplyModal, setShowReplyModal] = useState(false);
+const [selectedMessage, setSelectedMessage] = useState(null);
+const [replyText, setReplyText] = useState('');
+const [messageForm, setMessageForm] = useState({
+subject: '',
+message: '',
+messageType: 'general',
+priority: 'medium'
+});
 
   useEffect(() => {
-    if (user?.clientInfo) {
-      fetchData();
-    }
-  }, [user, activeTab]);
+if (user?.clientInfo) {
+fetchData();
+}
+}, [user, activeTab]);
 
-  const fetchData = async () => {
-    try {
-      if (activeTab === 'overview' || activeTab === 'projects') {
-        await fetchProjects();
-      }
-      if (activeTab === 'overview' || activeTab === 'payments') {
-        await fetchPayments();
-      }
-      if (activeTab === 'overview' || activeTab === 'messages') {
-        await fetchMessages();
-      }
-    } catch (error) {
-      console.error('Failed to fetch data:', error);
-    }
-  };
+
+const fetchData = async () => {
+try {
+if (activeTab === 'overview' || activeTab === 'projects') {
+await fetchProjects();
+}
+if (activeTab === 'overview' || activeTab === 'payments') {
+await fetchPayments();
+}
+if (activeTab === 'overview' || activeTab === 'messages') {
+await fetchMessages();
+}
+} catch (error) {
+toast.error('Failed to fetch data.');
+}
+};
 
   const fetchProjects = async () => {
-    setLoading(prev => ({ ...prev, projects: true }));
-    try {
-      console.log('🔄 Fetching client projects...');
-      const response = await projectAPI.getByClient(user.clientInfo._id);
-      setProjects(response.data.projects || []);
-      console.log('✅ Projects fetched:', response.data.projects?.length || 0);
-    } catch (error) {
-      console.error('❌ Failed to fetch projects:', error);
-      setProjects([]);
-    } finally {
-      setLoading(prev => ({ ...prev, projects: false }));
-    }
-  };
+setLoading(prev => ({ ...prev, projects: true }));
+try {
+const response = await projectAPI.getByClient(user.clientInfo._id);
+setProjects(response.data.projects || []);
+} catch (error) {
+toast.error('Failed to fetch projects.');
+setProjects([]);
+} finally {
+setLoading(prev => ({ ...prev, projects: false }));
+}
+};
 
   const fetchPayments = async () => {
-    setLoading(prev => ({ ...prev, payments: true }));
-    try {
-      console.log('🔄 Fetching client payments...');
-      const response = await paymentAPI.getByClient(user.clientInfo._id);
-      setPayments(response.data.payments || []);
-      console.log('✅ Payments fetched:', response.data.payments?.length || 0);
-    } catch (error) {
-      console.error('❌ Failed to fetch payments:', error);
-      setPayments([]);
-    } finally {
-      setLoading(prev => ({ ...prev, payments: false }));
-    }
-  };
+setLoading(prev => ({ ...prev, payments: true }));
+try {
+const response = await paymentAPI.getByClient(user.clientInfo._id);
+setPayments(response.data.payments || []);
+} catch (error) {
+toast.error('Failed to fetch payments.');
+setPayments([]);
+} finally {
+setLoading(prev => ({ ...prev, payments: false }));
+}
+};
 
   const fetchMessages = async () => {
-    setLoading(prev => ({ ...prev, messages: true }));
-    try {
-      console.log('🔄 Fetching client messages...');
-      console.log('👤 Current user info:', {
-        userId: user._id,
-        clientId: user.clientInfo._id,
-        role: user.role
-      });
-
-      const response = await messageAPI.getAll({
-        limit: 100
-      });
-      
-      console.log('📨 Raw API response:', response.data);
-      
-      if (response.data.success) {
-        const allMessages = response.data.messages || [];
-        console.log(`📋 Total messages from API: ${allMessages.length}`);
-        
-        setMessages(allMessages);
-        console.log('✅ Messages set in state:', allMessages.length);
-        
-      } else {
-        console.log('❌ Failed to fetch messages:', response.data.message);
-        setMessages([]);
-      }
-    } catch (error) {
-      console.error('❌ Failed to fetch messages:', error);
-      setMessages([]);
-    } finally {
-      setLoading(prev => ({ ...prev, messages: false }));
-    }
-  };
+setLoading(prev => ({ ...prev, messages: true }));
+try {
+const response = await messageAPI.getAll({ limit: 100 });
+if (response.data.success) {
+setMessages(response.data.messages || []);
+} else {
+setMessages([]);
+}
+} catch (error) {
+toast.error('Failed to fetch messages.');
+setMessages([]);
+} finally {
+setLoading(prev => ({ ...prev, messages: false }));
+}
+};
+// download invoice
+      const handleInvoiceDownload = async (id, invoiceNumber) => {
+  try {
+    const response = await paymentAPI.generateInvoice(id); 
+    const blob = new Blob([response.data], { type: 'application/pdf' }); // 👈 Blob type set
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `${invoiceNumber || 'invoice'}.pdf`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    toast.success('Invoice downloaded successfully!');
+  } catch (error) {
+    toast.error('Failed to download invoice.');
+    // optional: backend se error message show karne ke liye
+    // toast.error(error.response?.data?.message || 'Failed to download invoice.');
+  }
+};
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
@@ -207,22 +205,22 @@ const ClientDashboard = () => {
   };
 
   const getStatusBadge = (status) => {
-    const variants = {
-      'completed': 'success',
-      'in-progress': 'primary',
-      'planning': 'info',
-      'delayed': 'danger',
-      'cancelled': 'secondary',
-      'paid': 'success',
-      'pending': 'warning',
-      'overdue': 'danger',
-      'partial': 'info',
-      'unread': 'danger',
-      'read': 'primary',
-      'replied': 'success'
-    };
-    return <Badge bg={variants[status] || 'secondary'}>{status}</Badge>;
-  };
+const variants = {
+'completed': 'success',
+'in-progress': 'primary',
+'planning': 'info',
+'delayed': 'danger',
+'cancelled': 'secondary',
+'paid': 'success',
+'pending': 'warning',
+'overdue': 'danger',
+'partial': 'info',
+'unread': 'danger',
+'read': 'primary',
+'replied': 'success'
+};
+return <Badge bg={variants[status] || 'secondary'}>{status}</Badge>;
+};
 
   const getPriorityBadge = (priority) => {
     const variants = {
@@ -869,10 +867,15 @@ const ClientDashboard = () => {
                       </div>
                     </td>
                     <td>
-                      <Button size="sm" variant="outline-primary" className="rounded-pill">
+                      <Button
+                        size="sm"
+                        variant="outline-primary"
+                        className="rounded-pill"
+                        onClick={() => handleInvoiceDownload(payment._id, payment.invoiceNumber)}
+                        >
                         <i className="fas fa-download me-1"></i>
                         Download
-                      </Button>
+                        </Button>
                     </td>
                   </tr>
                 ))}

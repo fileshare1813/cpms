@@ -18,7 +18,7 @@ router.use(auth);
 // Routes accessible to all authenticated users
 router.get('/', getAllMessages);
 router.get('/stats', getMessageStats);
-router.get('/admin-users', getAdminUsers); // New route for clients to get admin users
+router.get('/admin-users', auth, getAdminUsers); // New route for clients to get admin users
 router.get('/:id', getMessageById);
 router.post('/', sendMessage);
 router.put('/:id/read', markAsRead);

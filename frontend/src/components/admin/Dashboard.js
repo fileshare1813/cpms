@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Table, Badge, ProgressBar, Button } from 'react-bootstrap';
+import { Container, Row, Col, Card, Table, Badge, ProgressBar, Button, Modal, Form, Alert } from 'react-bootstrap';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement } from 'chart.js';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import { useAuth } from '../../context/AuthContext';
@@ -9,7 +9,7 @@ import ProjectList from './ProjectList';
 import PaymentList from './PaymentList';
 import MessageList from './MessageList';
 import Reports from './Reports';
-import { clientAPI, projectAPI, paymentAPI, employeeAPI, messageAPI } from '../../services/api';
+import { clientAPI, projectAPI, paymentAPI, employeeAPI, messageAPI, authAPI } from '../../services/api';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement);
 
@@ -27,6 +27,13 @@ const AdminDashboard = () => {
     recentProjects: [],
     upcomingExpiries: []
   });
+  // Password change modal and state
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordChangeError, setPasswordChangeError] = useState('');
+  const [passwordChangeSuccess, setPasswordChangeSuccess] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -35,10 +42,40 @@ const AdminDashboard = () => {
     }
   }, [activeTab]);
 
+  // --- 3. Utility function for password change: ---
+const handlePasswordChange = async () => {
+  setChangingPassword(true);
+  setPasswordChangeError('');
+  if (newPassword !== confirmPassword) {
+    setPasswordChangeError('Passwords do not match.');
+    setChangingPassword(false);
+    return;
+  }
+  if (newPassword.length < 6) {
+    setPasswordChangeError('Password must be at least 6 characters long.');
+    setChangingPassword(false);
+    return;
+  }
+  try {
+    const response = await authAPI.changePassword({ newPassword });
+    setPasswordChangeSuccess('Password changed successfully');
+    setTimeout(() => {
+      setShowChangePasswordModal(false);
+      setNewPassword('');
+      setConfirmPassword('');
+      setPasswordChangeSuccess('');
+    }, 1500);
+  } catch (error) {
+    setPasswordChangeError(error.response?.data?.message || error.message);
+  } finally {
+    setChangingPassword(false);
+  }
+};
+
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      console.log('🔄 Fetching admin dashboard data...');
+      // console.log('🔄 Fetching admin dashboard data...');
       
       const [clientsRes, employeesRes, projectsRes, paymentsRes, messagesRes] = await Promise.all([
         clientAPI.getAll({ limit: 100 }).catch(() => ({ data: { total: 0, clients: [] } })),
@@ -821,6 +858,52 @@ const AdminDashboard = () => {
               </div>
             </Col>
             <Col lg={4} md={6} className="text-end">
+            <Modal show={showChangePasswordModal} onHide={() => setShowChangePasswordModal(false)} centered>
+  <Modal.Header closeButton>
+    <Modal.Title>Change Password</Modal.Title>
+  </Modal.Header>
+  <Modal.Body>
+    {passwordChangeError && <Alert variant="danger">{passwordChangeError}</Alert>}
+    {passwordChangeSuccess && <Alert variant="success">{passwordChangeSuccess}</Alert>}
+    <Form>
+      <Form.Group className="mb-3">
+        <Form.Label>New Password</Form.Label>
+        <Form.Control
+          type="password"
+          value={newPassword}
+          onChange={e => setNewPassword(e.target.value)}
+          placeholder="Enter new password"
+        />
+      </Form.Group>
+      <Form.Group className="mb-3">
+        <Form.Label>Confirm New Password</Form.Label>
+        <Form.Control
+          type="password"
+          value={confirmPassword}
+          onChange={e => setConfirmPassword(e.target.value)}
+          placeholder="Confirm new password"
+        />
+      </Form.Group>
+    </Form>
+  </Modal.Body>
+  <Modal.Footer>
+    <Button variant="secondary" onClick={() => setShowChangePasswordModal(false)}>
+      Cancel
+    </Button>
+    <Button variant="primary" onClick={handlePasswordChange} disabled={changingPassword}>
+      {changingPassword ? 'Changing...' : 'Change Password'}
+    </Button>
+  </Modal.Footer>
+</Modal>
+            {/* change pass */}
+            <Button
+    variant="outline-primary"
+    className="rounded-pill px-4 me-2"
+    onClick={() => setShowChangePasswordModal(true)}
+    style={{ borderWidth: '2px' }}
+  >
+    <i className="fas fa-key me-2"></i> Password Change
+  </Button>
               <Button 
                 variant="outline-danger" 
                 onClick={logout}

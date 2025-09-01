@@ -332,16 +332,22 @@ const MessageList = () => {
                               </div>
                             </div>
                           </td>
+                          {/*  add for employee */}
                           <td>
-                            {message.client ? (
-                              <div>
-                                <div className="fw-semibold">{message.client.companyName}</div>
-                                <small className="text-muted">{message.client.clientId}</small>
-                              </div>
-                            ) : (
-                              <span className="text-muted">-</span>
-                            )}
-                          </td>
+                              {message.client ? (
+                                <div>
+                                  <div className="fw-semibold">{message.client.companyName}</div>
+                                  <small className="text-muted">{message.client.clientId}</small>
+                                </div>
+                              ) : message.employee ? (
+                                <div>
+                                  <div className="fw-semibold">{message.employee.name}</div>
+                                  <small className="text-muted">{message.employee.employeeId}</small>
+                                </div>
+                              ) : (
+                                <span className="text-muted">-</span>
+                              )}
+                            </td>
                           <td>
                             <Badge bg="light" text="dark">{message.messageType}</Badge>
                           </td>
