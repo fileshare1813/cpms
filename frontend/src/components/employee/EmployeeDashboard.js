@@ -69,7 +69,7 @@ const EmployeeDashboard = () => {
       
       setAvailableClients(validClients);
       console.log('✅ Available clients fetched:', validClients.length);
-      console.log('👥 Clients with user accounts:', validClients.filter(c => c.user).length);
+      console.log('👥 Clients data:', validClients);
     } catch (error) {
       console.error('❌ Failed to fetch clients:', error);
       setAvailableClients([]);
@@ -139,170 +139,165 @@ const EmployeeDashboard = () => {
     }
   };
 
-  const handleSendMessage = async (e) => {
-    e.preventDefault();
-    
-    if (!messageForm.subject.trim() || !messageForm.message.trim()) {
-      toast.error('Please fill in all required fields');
-      return;
-    }
+const handleSendMessage = async (e) => {
+  e.preventDefault();
+  
+  // Enhanced validation with detailed logging
+  // console.log('📋 Form validation - Current form state:', {
+  //   subject: messageForm.subject,
+  //   message: messageForm.message,
+  //   subjectLength: messageForm.subject?.length,
+  //   messageLength: messageForm.message?.length,
+  //   recipientType: messageForm.recipientType,
+  //   clientId: messageForm.clientId
+  // });
 
-    if (messageForm.recipientType === 'client' && !messageForm.clientId) {
-      toast.error('Please select a client to send message to');
-      return;
-    }
+  if (!messageForm.subject || !messageForm.subject.trim()) {
+    toast.error('Subject is required');
+    return;
+  }
 
-    setLoading(prev => ({ ...prev, sendingMessage: true }));
+  if (!messageForm.message || !messageForm.message.trim()) {
+    toast.error('Message is required');
+    return;
+  }
 
-    try {
-      let recipientId = null;
-      let clientId = null;
+  const trimmedSubject = messageForm.subject.trim();
+  const trimmedMessage = messageForm.message.trim();
+
+  if (trimmedSubject.length < 3) {
+    toast.error('Subject must be at least 3 characters long');
+    return;
+  }
+
+  if (trimmedMessage.length < 10) {
+    toast.error('Message must be at least 10 characters long');
+    return;
+  }
+
+  if (messageForm.recipientType === 'client' && !messageForm.clientId) {
+    toast.error('Please select a client to send message to');
+    return;
+  }
+
+  setLoading(prev => ({ ...prev, sendingMessage: true }));
+
+  try {
+    let messageData = {
+      subject: trimmedSubject,
+      message: trimmedMessage,
+      messageType: messageForm.messageType || 'general',
+      priority: messageForm.priority || 'medium'
+    };
+
+    console.log('📤 Preparing message data:', {
+      recipientType: messageForm.recipientType,
+      clientId: messageForm.clientId,
+      messageType: messageForm.messageType,
+      subject: trimmedSubject,
+      messageLength: trimmedMessage.length
+    });
+
+    if (messageForm.recipientType === 'admin') {
+      // For admin messages, let backend handle finding admin user
+      console.log('📤 Sending message to admin...');
+      // Don't set recipient - let backend find admin
+    } else if (messageForm.recipientType === 'client') {
+      // For client messages, let backend handle finding client user
+      console.log('📤 Sending message to client:', messageForm.clientId);
       
-      if (messageForm.recipientType === 'admin') {
-        // Find admin user
-        console.log('🔍 Finding admin user for message...');
-        try {
-          const adminResponse = await messageAPI.getAdminUsers();
-          if (adminResponse.data.success && adminResponse.data.admins?.length > 0) {
-            recipientId = adminResponse.data.admins[0]._id;
-            console.log('✅ Found admin ID:', recipientId);
-          }
-        } catch (adminError) {
-          console.log('⚠️ getAdminUsers not available, trying alternative...');
-        }
-      } else if (messageForm.recipientType === 'client') {
-        // Find client user with multiple fallback methods
-        const selectedClient = availableClients.find(client => client._id === messageForm.clientId);
-        console.log('🔍 Selected client for messaging:', selectedClient);
-        
-        if (!selectedClient) {
-          toast.error('Selected client not found');
-          return;
-        }
-        
-        clientId = selectedClient._id;
-        
-        // Try multiple methods to find client user
-        try {
-          // Method 1: Direct user field
-          if (selectedClient.user) {
-            recipientId = selectedClient.user._id || selectedClient.user;
-            console.log('✅ Method 1: Found client user ID from user field:', recipientId);
-          }
-          
-          // Method 2: Search by email
-          if (!recipientId && selectedClient.email) {
-            console.log('🔍 Method 2: Searching user by email:', selectedClient.email);
-            try {
-              const userResponse = await userAPI.search({ 
-                email: selectedClient.email, 
-                role: 'client' 
-              });
-              if (userResponse.data.success && userResponse.data.user) {
-                recipientId = userResponse.data.user._id;
-                console.log('✅ Method 2: Found client user by email:', recipientId);
-              }
-            } catch (emailError) {
-              console.log('⚠️ Method 2 failed:', emailError.message);
-            }
-          }
-          
-          // Method 3: Search by clientId field in User collection
-          if (!recipientId) {
-            console.log('🔍 Method 3: Searching user by clientId field:', selectedClient._id);
-            try {
-              const userResponse = await userAPI.getByClientId(selectedClient._id);
-              if (userResponse.data.success && userResponse.data.user) {
-                recipientId = userResponse.data.user._id;
-                console.log('✅ Method 3: Found client user by clientId field:', recipientId);
-              }
-            } catch (clientIdError) {
-              console.log('⚠️ Method 3 failed:', clientIdError.message);
-            }
-          }
-          
-          // Method 4: Get all client users and match
-          if (!recipientId) {
-            console.log('🔍 Method 4: Searching in all client users...');
-            try {
-              const allClientsResponse = await userAPI.getByRole('client');
-              if (allClientsResponse.data.users) {
-                const matchingUser = allClientsResponse.data.users.find(user => 
-                  user.clientId === selectedClient._id || 
-                  user.email === selectedClient.email ||
-                  user.clientInfo?._id === selectedClient._id
-                );
-                if (matchingUser) {
-                  recipientId = matchingUser._id;
-                  console.log('✅ Method 4: Found matching client user:', recipientId);
-                }
-              }
-            } catch (allUsersError) {
-              console.log('⚠️ Method 4 failed:', allUsersError.message);
-            }
-          }
-          
-          if (!recipientId) {
-            toast.error(
-              `Client "${selectedClient.companyName}" does not have a linked user account. ` +
-              'Please ask admin to create a user account for this client.'
-            );
-            return;
-          }
-          
-        } catch (clientUserError) {
-          console.error('❌ Error finding client user:', clientUserError);
-          toast.error('Failed to find client user account');
-          return;
-        }
-      }
-
-      if (!recipientId) {
-        toast.error('Could not find recipient. Please try again.');
+      const selectedClient = availableClients.find(client => client._id === messageForm.clientId);
+      if (!selectedClient) {
+        toast.error('Selected client not found');
         return;
       }
 
-      const messageData = {
-        subject: messageForm.subject.trim(),
-        message: messageForm.message.trim(),
-        messageType: messageForm.messageType,
-        priority: messageForm.priority,
-        recipient: recipientId,
-        ...(clientId && { client: clientId })
-      };
-
-      console.log('📤 Sending message with data:', messageData);
-      const response = await messageAPI.send(messageData);
+      // Let backend handle finding the client user - just pass the client ID
+      messageData.client = selectedClient._id;
+      messageData.recipient = 'CLIENT_USER_TO_BE_FOUND'; // Special marker for backend
       
-      if (response.data.success) {
-        toast.success(`✅ Message sent successfully to ${messageForm.recipientType}!`);
-        setShowMessageModal(false);
-        setMessageForm({
-          subject: '',
-          message: '',
-          messageType: 'general',
-          priority: 'medium',
-          recipientType: 'admin',
-          clientId: ''
-        });
-        
-        if (activeTab === 'messages' || activeTab === 'overview') {
-          await fetchMessages();
-        }
-      } else {
-        toast.error(`❌ ${response.data.message || 'Failed to send message'}`);
-      }
-    } catch (error) {
-      console.error('❌ Failed to send message:', error);
-      const errorMessage = error.response?.data?.message || 
-                          error.response?.data?.error ||
-                          error.message || 
-                          'Failed to send message';
-      toast.error(`❌ ${errorMessage}`);
-    } finally {
-      setLoading(prev => ({ ...prev, sendingMessage: false }));
+      console.log('🎯 Sending to client with backend resolution');
     }
-  };
+
+    console.log('📤 Final message data being sent:', messageData);
+    
+    const response = await messageAPI.send(messageData);
+    
+    console.log('📨 API Response:', response.data);
+    
+    if (response.data.success) {
+      toast.success(`✅ Message sent successfully to ${messageForm.recipientType}!`);
+      setShowMessageModal(false);
+      setMessageForm({
+        subject: '',
+        message: '',
+        messageType: 'general',
+        priority: 'medium',
+        recipientType: 'admin',
+        clientId: ''
+      });
+      
+      if (activeTab === 'messages' || activeTab === 'overview') {
+        await fetchMessages();
+      }
+    } else {
+      console.error('❌ API returned failure:', response.data);
+      toast.error(`❌ ${response.data.message || 'Failed to send message'}`);
+    }
+  } catch (error) {
+    console.error('❌ Failed to send message:', error);
+    console.error('❌ Error details:', {
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message
+    });
+    
+    // Enhanced error handling
+    let errorMessage = 'Failed to send message';
+    
+    if (error.response?.data?.message) {
+      errorMessage = error.response.data.message;
+    } else if (error.response?.data?.errors && Array.isArray(error.response.data.errors)) {
+      errorMessage = error.response.data.errors.join(', ');
+    } else if (error.response?.data?.details) {
+      errorMessage = `${error.response.data.message}: ${error.response.data.details}`;
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
+    toast.error(`❌ ${errorMessage}`);
+  } finally {
+    setLoading(prev => ({ ...prev, sendingMessage: false }));
+  }
+};
+
+// FIXED: Updated Quick Message Templates with proper validation
+const quickMessageTemplates = {
+  projectUpdateToAdmin: {
+    subject: 'Project Status Update',
+    message: 'Dear Admin,\n\nI wanted to provide an update on the project progress:\n\nProject Details:\n- Current Status: \n- Completed Tasks: \n- Upcoming Tasks: \n- Issues/Blockers: \n- Expected Completion: \n\nPlease let me know if you need any additional information.\n\nBest regards,\n' + (user?.employeeInfo?.name || 'Employee'),
+    messageType: 'project-update',
+    priority: 'medium',
+    recipientType: 'admin',
+    clientId: ''
+  },
+  leaveRequest: {
+    subject: 'Leave Application Request',
+    message: 'Dear Admin,\n\nI would like to request leave for the following period:\n\nLeave Details:\n- From Date: [Please specify]\n- To Date: [Please specify]\n- Total Days: [Please specify]\n- Reason: [Please specify reason]\n- Contact during leave: [Your contact info]\n\nI have ensured that all my current tasks will be completed or properly handed over before my leave period.\n\nPlease consider my application and let me know if you need any additional information.\n\nThank you for your consideration.\n\nBest regards,\n' + (user?.employeeInfo?.name || 'Employee'),
+    messageType: 'leave-request',
+    priority: 'medium',
+    recipientType: 'admin',
+    clientId: ''
+  },
+  clientQuestion: {
+    subject: 'Project Clarification Required',
+    message: 'Dear Client,\n\nI hope this message finds you well.\n\nI am currently working on your project and need some clarification on the following points:\n\n1. [Please specify your question]\n2. [Additional questions if any]\n\nYour input will help me ensure that the project meets your exact requirements and expectations.\n\nPlease let me know your thoughts at your earliest convenience.\n\nThank you for your time and cooperation.\n\nBest regards,\n' + (user?.employeeInfo?.name || 'Employee'),
+    messageType: 'clarification',
+    priority: 'medium',
+    recipientType: 'client',
+    clientId: availableClients.length > 0 ? availableClients[0]._id : ''
+  }
+};
 
   const handleViewMessage = async (message) => {
     setSelectedMessage(message);
@@ -714,97 +709,127 @@ const EmployeeDashboard = () => {
 
                 {/* Quick Message Options */}
                 <div className="quick-message-section">
-                  <hr className="my-3" />
-                  <h6 className="text-muted mb-3 fw-semibold">
-                    <i className="fas fa-bolt me-2"></i>
-                    Quick Messages
-                  </h6>
-                  
-                  <div className="d-grid gap-2">
-                    <Button 
-                      variant="outline-primary" 
-                      size="sm"
-                      className="quick-msg-btn d-flex align-items-center justify-content-start py-2"
-                      onClick={() => {
-                        setMessageForm({
-                          subject: 'Project Status Update',
-                          message: 'Hi Sir,\n\nI wanted to provide an update on the project progress:\n\n',
-                          messageType: 'project-update',
-                          priority: 'medium',
-                          recipientType: 'admin',
-                          clientId: ''
-                        });
-                        setShowMessageModal(true);
-                      }}
-                      style={{ borderRadius: '8px' }}
-                    >
-                      <i className="fas fa-chart-line me-2 text-primary"></i>
-                      <small>Project Update to Admin</small>
-                    </Button>
-                    
-                    <Button 
-                      variant="outline-info" 
-                      size="sm"
-                      className="quick-msg-btn d-flex align-items-center justify-content-start py-2"
-                      onClick={() => {
-                        setMessageForm({
-                          subject: 'Leave Application',
-                          message: 'Dear Admin,\n\nI would like to request leave for:\n\nFrom: \nTo: \nReason: \n\nPlease consider my application.\n\nThanks',
-                          messageType: 'leave-request',
-                          priority: 'medium',
-                          recipientType: 'admin',
-                          clientId: ''
-                        });
-                        setShowMessageModal(true);
-                      }}
-                      style={{ borderRadius: '8px' }}
-                    >
-                      <i className="fas fa-calendar-times me-2 text-info"></i>
-                      <small>Leave Request</small>
-                    </Button>
-                    
-                    {availableClients.length > 0 && (
-                      <Button 
-                        variant="outline-success" 
-                        size="sm"
-                        className="quick-msg-btn d-flex align-items-center justify-content-start py-2"
-                        onClick={() => {
-                          setMessageForm({
-                            subject: 'Project Clarification Required',
-                            message: 'Dear Client,\n\nI need some clarification regarding:\n\n',
-                            messageType: 'clarification',
-                            priority: 'medium',
-                            recipientType: 'client',
-                            clientId: availableClients[0]._id
-                          });
-                          setShowMessageModal(true);
-                        }}
-                        style={{ borderRadius: '8px' }}
-                      >
-                        <i className="fas fa-question-circle me-2 text-success"></i>
-                        <small>Ask Client Question</small>
-                      </Button>
-                    )}
-                  </div>
-                </div>
+  <hr className="my-3" />
+  <h6 className="text-muted mb-3 fw-semibold">
+    <i className="fas fa-bolt me-2"></i>
+    Quick Messages
+  </h6>
+  
+  <div className="d-grid gap-2">
+    <Button 
+      variant="outline-primary" 
+      size="sm"
+      className="quick-msg-btn d-flex align-items-center justify-content-start py-2"
+      onClick={() => {
+        setMessageForm({
+          subject: 'Project Status Update',
+          message: `Dear Admin,
 
-                <Button 
-                  variant="outline-success" 
-                  size="lg"
-                  className="action-btn d-flex align-items-center justify-content-center py-3"
-                  onClick={() => toast.info('Project reporting feature coming soon!')}
-                  style={{
-                    borderRadius: '12px',
-                    borderWidth: '2px',
-                    transition: 'all 0.3s ease'
-                  }}
-                >
-                  <i className="fas fa-chart-line me-3 fa-lg"></i>
-                  <div className="text-start">
-                    <div className="fw-bold">Project Reports</div>
-                    <small className="opacity-75">Track your progress</small>
-                  </div>
-                </Button>
+I wanted to provide an update on the project progress:
+
+Project Details:
+- Current Status: [Please specify]
+- Completed Tasks: [List completed tasks]
+- Upcoming Tasks: [List upcoming tasks]
+- Issues/Blockers: [Any issues or blockers]
+- Expected Completion: [Timeline]
+
+Please let me know if you need any additional information.
+
+Best regards,
+${user?.employeeInfo?.name || 'Employee'}`,
+          messageType: 'project-update',
+          priority: 'medium',
+          recipientType: 'admin',
+          clientId: ''
+        });
+        setShowMessageModal(true);
+      }}
+      style={{ borderRadius: '8px' }}
+    >
+      <i className="fas fa-chart-line me-2 text-primary"></i>
+      <small>Project Update to Admin</small>
+    </Button>
+    
+    <Button 
+      variant="outline-info" 
+      size="sm"
+      className="quick-msg-btn d-flex align-items-center justify-content-start py-2"
+      onClick={() => {
+        setMessageForm({
+          subject: 'Leave Application Request',
+          message: `Dear Admin,
+
+I would like to request leave for the following period:
+
+Leave Details:
+- From Date: [Please specify]
+- To Date: [Please specify]  
+- Total Days: [Please specify]
+- Reason: [Please specify reason]
+- Contact during leave: [Your contact info]
+
+I have ensured that all my current tasks will be completed or properly handed over before my leave period.
+
+Please consider my application and let me know if you need any additional information.
+
+Thank you for your consideration.
+
+Best regards,
+${user?.employeeInfo?.name || 'Employee'}`,
+          messageType: 'leave-request',
+          priority: 'medium',
+          recipientType: 'admin',
+          clientId: ''
+        });
+        setShowMessageModal(true);
+      }}
+      style={{ borderRadius: '8px' }}
+    >
+      <i className="fas fa-calendar-times me-2 text-info"></i>
+      <small>Leave Request</small>
+    </Button>
+    
+    {availableClients.length > 0 && (
+      <Button 
+        variant="outline-success" 
+        size="sm"
+        className="quick-msg-btn d-flex align-items-center justify-content-start py-2"
+        onClick={() => {
+          setMessageForm({
+            subject: 'Project Clarification Required',
+            message: `Dear Client,
+
+I hope this message finds you well.
+
+I am currently working on your project and need some clarification on the following points:
+
+1. [Please specify your question]
+2. [Additional questions if any]
+
+Your input will help me ensure that the project meets your exact requirements and expectations.
+
+Please let me know your thoughts at your earliest convenience.
+
+Thank you for your time and cooperation.
+
+Best regards,
+${user?.employeeInfo?.name || 'Employee'}`,
+            messageType: 'clarification',
+            priority: 'medium',
+            recipientType: 'client',
+            clientId: availableClients[0]._id
+          });
+          setShowMessageModal(true);
+        }}
+        style={{ borderRadius: '8px' }}
+      >
+        <i className="fas fa-question-circle me-2 text-success"></i>
+        <small>Ask Client Question</small>
+      </Button>
+    )}
+  </div>
+</div>
               </div>
             </Card.Body>
           </Card>
@@ -974,7 +999,7 @@ const EmployeeDashboard = () => {
           </div>
           <div>
             <h4 className="mb-0 fw-bold">Messages & Conversations</h4>
-            <small className="text-muted">Communicate with admin and team</small>
+            <small className="text-muted">Communicate with admin and clients</small>
           </div>
         </div>
         <Button 
@@ -1012,7 +1037,7 @@ const EmployeeDashboard = () => {
                 <i className="fas fa-inbox fa-3x text-muted"></i>
               </div>
               <h5 className="fw-bold mb-3">No Messages</h5>
-              <p className="text-muted mb-4">Start a conversation with admin by sending a message.</p>
+              <p className="text-muted mb-4">Start a conversation with admin or clients by sending a message.</p>
               <Button 
                 variant="primary" 
                 onClick={() => setShowMessageModal(true)}
@@ -1348,7 +1373,6 @@ const EmployeeDashboard = () => {
                       {availableClients.map((client) => (
                         <option key={client._id} value={client._id}>
                           {client.companyName} ({client.clientId})
-                          {client.user ? ' ✅' : ' ⚠️ No User Account'}
                         </option>
                       ))}
                     </Form.Select>
@@ -1361,12 +1385,7 @@ const EmployeeDashboard = () => {
                     {messageForm.clientId && (
                       <Form.Text className="text-info">
                         <i className="fas fa-info-circle me-1"></i>
-                        {(() => {
-                          const selectedClient = availableClients.find(c => c._id === messageForm.clientId);
-                          return selectedClient?.user 
-                            ? `✅ Client has user account - Message can be sent`
-                            : `⚠️ Client may not have user account - We'll try to find it`;
-                        })()}
+                        Backend will automatically find the client's user account for message delivery.
                       </Form.Text>
                     )}
                   </Form.Group>

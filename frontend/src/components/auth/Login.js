@@ -114,7 +114,7 @@ const Login = () => {
                         <i className="fas fa-project-diagram me-2"></i>
                         CMS
                       </h1>
-                      <p className="text-muted"><b>V3.0</b></p>
+                      <p className="text-muted"><b>V3.7</b></p>
                       <p className="text-muted">Choose your role and sign in</p>
                     </div>
 

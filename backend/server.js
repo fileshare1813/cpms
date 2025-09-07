@@ -12,6 +12,7 @@ const employeeRoutes = require('./routes/employees');
 const projectRoutes = require('./routes/projects');
 const paymentRoutes = require('./routes/payments');
 const messageRoutes = require('./routes/messages');
+const userRoutes = require('./routes/users');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -69,6 +70,7 @@ app.use('/api/employees', employeeRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/users', userRoutes);
 
 // Health Check
 app.get('/api/health', async (req, res) => {

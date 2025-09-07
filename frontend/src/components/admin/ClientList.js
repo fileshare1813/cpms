@@ -28,17 +28,21 @@ const ClientList = () => {
     totalPages: 0
   });
 
+  // FIXED: Enhanced form data with user account fields
   const [formData, setFormData] = useState({
     companyName: '',
     contactPerson: '',
     email: '',
-    password: '',
     phone: '',
     address: '',
     notes: '',
     domains: [],
     hosting: [],
-    status: 'active'
+    status: 'active',
+    // User account fields (for new clients)
+    userName: '',
+    userPassword: '',
+    createUserAccount: true // Toggle for creating user account
   });
 
   useEffect(() => {
@@ -84,13 +88,16 @@ const ClientList = () => {
         companyName: client.companyName || '',
         contactPerson: client.contactPerson || '',
         email: client.email || '',
-        email: client.password || '',
         phone: client.phone || '',
         address: client.address || '',
         notes: client.notes || '',
         domains: client.domains || [],
         hosting: client.hosting || [],
-        status: client.status || 'active'
+        status: client.status || 'active',
+        // Don't show user fields for editing
+        userName: '',
+        userPassword: '',
+        createUserAccount: false
       });
     } else {
       setEditingClient(null);
@@ -98,13 +105,16 @@ const ClientList = () => {
         companyName: '',
         contactPerson: '',
         email: '',
-        password: '',
         phone: '',
         address: '',
         notes: '',
         domains: [],
         hosting: [],
-        status: 'active'
+        status: 'active',
+        // User account fields for new client
+        userName: '',
+        userPassword: '',
+        createUserAccount: true
       });
     }
     setShowModal(true);
@@ -117,13 +127,14 @@ const ClientList = () => {
   };
 
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: value
+      [name]: type === 'checkbox' ? checked : value
     }));
   };
 
+  // FIXED: Enhanced submit function with proper validation
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
@@ -131,23 +142,77 @@ const ClientList = () => {
     try {
       console.log('💾 Saving client data:', formData);
       
-      // Validate required fields
-      if (!formData.companyName || !formData.contactPerson || !formData.email || !formData.phone) {
-        toast.error('Please fill all required fields');
+      // Enhanced validation
+      const requiredFields = [
+        { field: 'companyName', message: 'Company name is required' },
+        { field: 'contactPerson', message: 'Contact person is required' },
+        { field: 'email', message: 'Email is required' },
+        { field: 'phone', message: 'Phone number is required' }
+      ];
+
+      // Additional validation for new clients with user accounts
+      if (!editingClient && formData.createUserAccount) {
+        requiredFields.push(
+          { field: 'userName', message: 'User name is required for client account' },
+          { field: 'userPassword', message: 'Password is required for client account' }
+        );
+      }
+
+      // Check required fields
+      for (const { field, message } of requiredFields) {
+        if (!formData[field] || !formData[field].toString().trim()) {
+          toast.error(message);
+          setSaving(false);
+          return;
+        }
+      }
+
+      // Email validation
+      const emailRegex = /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/;
+      if (!emailRegex.test(formData.email)) {
+        toast.error('Please enter a valid email address');
         setSaving(false);
         return;
       }
 
-      // Prepare form data
+      // Password validation for new clients
+      if (!editingClient && formData.createUserAccount && formData.userPassword.length < 6) {
+        toast.error('Password must be at least 6 characters long');
+        setSaving(false);
+        return;
+      }
+
+      // Phone validation
+      if (formData.phone.length < 10) {
+        toast.error('Phone number must be at least 10 digits');
+        setSaving(false);
+        return;
+      }
+
+      // Prepare client data
       const clientData = {
-        ...formData,
         companyName: formData.companyName.trim(),
         contactPerson: formData.contactPerson.trim(),
         email: formData.email.trim().toLowerCase(),
-        phone: formData.phone.trim()
+        phone: formData.phone.trim(),
+        address: formData.address?.trim() || '',
+        notes: formData.notes?.trim() || '',
+        domains: formData.domains || [],
+        hosting: formData.hosting || [],
+        status: formData.status
       };
 
-      console.log('📤 Sending client data:', clientData);
+      // Add user account data for new clients
+      if (!editingClient && formData.createUserAccount) {
+        clientData.userName = formData.userName.trim();
+        clientData.userPassword = formData.userPassword;
+        console.log('📤 Creating client with user account');
+      }
+
+      console.log('📤 Sending client data:', {
+        ...clientData,
+        userPassword: clientData.userPassword ? '[HIDDEN]' : undefined
+      });
 
       let response;
       if (editingClient) {
@@ -161,7 +226,13 @@ const ClientList = () => {
       console.log('✅ Client save response:', response.data);
       
       if (response.data.success) {
-        toast.success(editingClient ? 'Client updated successfully!' : 'Client created successfully!');
+        const successMessage = editingClient 
+          ? 'Client updated successfully!' 
+          : formData.createUserAccount 
+            ? 'Client and user account created successfully!' 
+            : 'Client created successfully!';
+        
+        toast.success(successMessage);
         handleModalClose();
         fetchClients();
       } else {
@@ -169,8 +240,17 @@ const ClientList = () => {
       }
     } catch (error) {
       console.error('❌ Client save error:', error);
-      const errorMessage = error.response?.data?.message || error.message || 'Failed to save client';
-      toast.error(errorMessage);
+      let errorMessage = 'Failed to save client';
+      
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.data?.errors && Array.isArray(error.response.data.errors)) {
+        errorMessage = error.response.data.errors.join(', ');
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      toast.error(`❌ ${errorMessage}`);
     } finally {
       setSaving(false);
     }
@@ -196,7 +276,7 @@ const ClientList = () => {
     }
   };
 
-  // Account creation functions
+  // Account creation functions (for existing clients without accounts)
   const handleCreateClientAccount = (client) => {
     setSelectedClient(client);
     setAccountForm({
@@ -264,7 +344,7 @@ const ClientList = () => {
   };
 
   const checkHasLoginAccount = (client) => {
-    return client.hasLoginAccount || false;
+    return client.user || client.hasLoginAccount || false;
   };
 
   return (
@@ -307,21 +387,6 @@ const ClientList = () => {
           </Button>
         </Col>
       </Row>
-
-      {/* Debug Info */}
-      {/* <Row className="mb-3">
-        <Col>
-          <Alert variant="info">
-            <small>
-              <strong>Debug Info:</strong> 
-              Total Clients: {pagination.total} | 
-              Current Page: {pagination.page} | 
-              Loading: {loading ? 'Yes' : 'No'} | 
-              API Base: http://localhost:5000/api
-            </small>
-          </Alert>
-        </Col>
-      </Row> */}
 
       {/* Clients Table */}
       <Card className="custom-table">
@@ -379,8 +444,7 @@ const ClientList = () => {
                           <td>{client.contactPerson}</td>
                           <td>
                             <div className="fw-semibold">{client.email}</div>
-                            <small className="text-muted">{client.password || 'Not Set'}</small>
-                            </td>
+                          </td>
                           <td>{client.phone}</td>
                           <td>{getStatusBadge(client.status)}</td>
                           <td>
@@ -481,7 +545,7 @@ const ClientList = () => {
         </Card.Body>
       </Card>
 
-      {/* Add/Edit Client Modal */}
+      {/* FIXED: Enhanced Add/Edit Client Modal */}
       <Modal show={showModal} onHide={handleModalClose} size="lg">
         <Modal.Header closeButton>
           <Modal.Title>
@@ -492,118 +556,184 @@ const ClientList = () => {
         
         <Form onSubmit={handleSubmit}>
           <Modal.Body>
-            {/* Debug Form Data */}
-            <Alert variant="light">
-              <small>
-                <strong>Form Debug : </strong> 
-                Company: {formData.companyName || 'Empty'} | 
-                Email: {formData.email || 'Empty'} | 
-                Saving: {saving ? 'Yes' : 'No'}
-              </small>
+            {/* Client Information Section */}
+            <div className="mb-4">
+              <h6 className="fw-bold text-primary mb-3">
+                <i className="fas fa-building me-2"></i>
+                Client Information
+              </h6>
+              
+              <Row>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Company Name <span className="text-danger">*</span></Form.Label>
+                    <Form.Control
+                      type="text"
+                      name="companyName"
+                      value={formData.companyName}
+                      onChange={handleInputChange}
+                      required
+                      placeholder="Enter company name"
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Contact Person <span className="text-danger">*</span></Form.Label>
+                    <Form.Control
+                      type="text"
+                      name="contactPerson"
+                      value={formData.contactPerson}
+                      onChange={handleInputChange}
+                      required
+                      placeholder="Contact person name"
+                    />
+                  </Form.Group>
+                </Col>
+              </Row>
+
+              <Row>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Email Address <span className="text-danger">*</span></Form.Label>
+                    <Form.Control
+                      type="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleInputChange}
+                      required
+                      placeholder="client@company.com"
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Phone Number <span className="text-danger">*</span></Form.Label>
+                    <Form.Control
+                      type="tel"
+                      name="phone"
+                      value={formData.phone}
+                      onChange={handleInputChange}
+                      required
+                      placeholder="+91 9876543210"
+                    />
+                  </Form.Group>
+                </Col>
+              </Row>
+
+              <Form.Group className="mb-3">
+                <Form.Label>Address</Form.Label>
+                <Form.Control
+                  as="textarea"
+                  rows={2}
+                  name="address"
+                  value={formData.address}
+                  onChange={handleInputChange}
+                  placeholder="Complete address"
+                />
+              </Form.Group>
+
+              <Form.Group className="mb-3">
+                <Form.Label>Notes</Form.Label>
+                <Form.Control
+                  as="textarea"
+                  rows={3}
+                  name="notes"
+                  value={formData.notes}
+                  onChange={handleInputChange}
+                  placeholder="Additional notes about client"
+                />
+              </Form.Group>
+
+              <Form.Group className="mb-3">
+                <Form.Label>Status</Form.Label>
+                <Form.Select
+                  name="status"
+                  value={formData.status}
+                  onChange={handleInputChange}
+                >
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                  <option value="suspended">Suspended</option>
+                </Form.Select>
+              </Form.Group>
+            </div>
+
+            {/* User Account Section (Only for new clients) */}
+            {!editingClient && (
+              <div className="mb-4">
+                <hr />
+                <div className="d-flex align-items-center justify-content-between mb-3">
+                  <h6 className="fw-bold text-success mb-0">
+                    <i className="fas fa-user-plus me-2"></i>
+                    Create User Account
+                  </h6>
+                  <Form.Check
+                    type="switch"
+                    id="createUserAccount"
+                    name="createUserAccount"
+                    checked={formData.createUserAccount}
+                    onChange={handleInputChange}
+                    label="Enable"
+                  />
+                </div>
+
+                {formData.createUserAccount && (
+                  <>
+                    <Alert variant="info" className="mb-3">
+                      <i className="fas fa-info-circle me-2"></i>
+                      <strong>Client Portal Access:</strong> This will create a login account for the client to access their projects, payments, and messages.
+                    </Alert>
+
+                    <Row>
+                      <Col md={6}>
+                        <Form.Group className="mb-3">
+                          <Form.Label>User Name <span className="text-danger">*</span></Form.Label>
+                          <Form.Control
+                            type="text"
+                            name="userName"
+                            value={formData.userName}
+                            onChange={handleInputChange}
+                            required={formData.createUserAccount}
+                            placeholder="Enter user name"
+                          />
+                          <Form.Text className="text-muted">
+                            This will be the display name in the system
+                          </Form.Text>
+                        </Form.Group>
+                      </Col>
+                      <Col md={6}>
+                        <Form.Group className="mb-3">
+                          <Form.Label>Password <span className="text-danger">*</span></Form.Label>
+                          <Form.Control
+                            type="password"
+                            name="userPassword"
+                            value={formData.userPassword}
+                            onChange={handleInputChange}
+                            required={formData.createUserAccount}
+                            minLength={6}
+                            placeholder="Min 6 characters"
+                          />
+                          <Form.Text className="text-muted">
+                            Client will use this password to login
+                          </Form.Text>
+                        </Form.Group>
+                      </Col>
+                    </Row>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Form Debug Info (Remove in production) */}
+            <Alert variant="light" className="small">
+              <strong>Debug:</strong> 
+              Company: {formData.companyName || 'Empty'} | 
+              Email: {formData.email || 'Empty'} | 
+              User Account: {formData.createUserAccount ? 'Yes' : 'No'} |
+              User Name: {formData.userName || 'Empty'} |
+              Saving: {saving ? 'Yes' : 'No'}
             </Alert>
-
-            <Row>
-              <Col md={6}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Company Name <span className="text-danger">*</span></Form.Label>
-                  <Form.Control
-                    type="text"
-                    name="companyName"
-                    value={formData.companyName}
-                    onChange={handleInputChange}
-                    required
-                    placeholder="Enter company name"
-                    className={!formData.companyName ? 'is-invalid' : ''}
-                  />
-                  {!formData.companyName && <div className="invalid-feedback">Company name is required</div>}
-                </Form.Group>
-              </Col>
-              <Col md={6}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Contact Person <span className="text-danger">*</span></Form.Label>
-                  <Form.Control
-                    type="text"
-                    name="contactPerson"
-                    value={formData.contactPerson}
-                    onChange={handleInputChange}
-                    required
-                    placeholder="Contact person name"
-                    className={!formData.contactPerson ? 'is-invalid' : ''}
-                  />
-                  {!formData.contactPerson && <div className="invalid-feedback">Contact person is required</div>}
-                </Form.Group>
-              </Col>
-            </Row>
-
-            <Row>
-              <Col md={6}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Email Address <span className="text-danger">*</span></Form.Label>
-                  <Form.Control
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    required
-                    placeholder="client@company.com"
-                    className={!formData.email ? 'is-invalid' : ''}
-                  />
-                  {!formData.email && <div className="invalid-feedback">Email is required</div>}
-                </Form.Group>
-              </Col>
-              <Col md={6}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Phone Number <span className="text-danger">*</span></Form.Label>
-                  <Form.Control
-                    type="tel"
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleInputChange}
-                    required
-                    placeholder="+91 9876543210"
-                    className={!formData.phone ? 'is-invalid' : ''}
-                  />
-                  {!formData.phone && <div className="invalid-feedback">Phone is required</div>}
-                </Form.Group>
-              </Col>
-            </Row>
-
-            <Form.Group className="mb-3">
-              <Form.Label>Address</Form.Label>
-              <Form.Control
-                as="textarea"
-                rows={2}
-                name="address"
-                value={formData.address}
-                onChange={handleInputChange}
-                placeholder="Complete address"
-              />
-            </Form.Group>
-
-            <Form.Group className="mb-3">
-              <Form.Label>Notes</Form.Label>
-              <Form.Control
-                as="textarea"
-                rows={3}
-                name="notes"
-                value={formData.notes}
-                onChange={handleInputChange}
-                placeholder="Additional notes about client"
-              />
-            </Form.Group>
-
-            <Form.Group className="mb-3">
-              <Form.Label>Status</Form.Label>
-              <Form.Select
-                name="status"
-                value={formData.status}
-                onChange={handleInputChange}
-              >
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-                <option value="suspended">Suspended</option>
-              </Form.Select>
-            </Form.Group>
           </Modal.Body>
           
           <Modal.Footer>
@@ -613,7 +743,14 @@ const ClientList = () => {
             <Button 
               type="submit" 
               variant="primary" 
-              disabled={saving || !formData.companyName || !formData.contactPerson || !formData.email || !formData.phone}
+              disabled={
+                saving || 
+                !formData.companyName.trim() || 
+                !formData.contactPerson.trim() || 
+                !formData.email.trim() || 
+                !formData.phone.trim() ||
+                (formData.createUserAccount && !editingClient && (!formData.userName.trim() || !formData.userPassword))
+              }
             >
               {saving ? (
                 <>
@@ -631,7 +768,7 @@ const ClientList = () => {
         </Form>
       </Modal>
 
-      {/* Create Client Account Modal */}
+      {/* Create Client Account Modal (for existing clients) */}
       <Modal show={showAccountModal} onHide={() => setShowAccountModal(false)} size="md">
         <Modal.Header closeButton>
           <Modal.Title>
@@ -748,5 +885,3 @@ const ClientList = () => {
 };
 
 export default ClientList;
-
-

@@ -36,15 +36,27 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
-    // console.error('❌ Response Error:', error.response?.status, error.response?.data);
+    console.error('❌ Response Error:', error.response?.status, error.response?.data);
+    
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       toast.error('Session expired. Please login again.');
       window.location.href = '/login';
-    } else {
-      toast.error(error.response?.data?.message || 'Something went wrong!');
+    } else if (error.response?.status === 400) {
+      // Don't show generic toast for validation errors - let component handle it
+      const errorData = error.response.data;
+      if (errorData.errors && Array.isArray(errorData.errors)) {
+        console.error('Validation errors:', errorData.errors);
+      } else if (errorData.message && !errorData.message.includes('validation')) {
+        toast.error(errorData.message);
+      }
+    } else if (error.response?.status >= 500) {
+      toast.error('Server error. Please try again later.');
+    } else if (!error.response) {
+      toast.error('Network error. Please check your connection.');
     }
+    
     return Promise.reject(error);
   }
 );

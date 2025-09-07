@@ -9,9 +9,9 @@ const findClientUser = async (clientId) => {
     console.log('🔍 Finding user for client ID:', clientId);
     
     // Method 1: Client has direct user reference
-    const clientWithUser = await Client.findById(clientId).populate('user', '_id');
+    const clientWithUser = await Client.findById(clientId).populate('user', '_id name email');
     if (clientWithUser && clientWithUser.user) {
-      console.log('✅ Method 1: Found user via client.user field');
+      console.log('✅ Method 1: Found user via client.user field:', clientWithUser.user._id);
       return clientWithUser.user._id;
     }
     
@@ -21,30 +21,34 @@ const findClientUser = async (clientId) => {
       role: 'client'
     });
     if (userByClientId) {
-      console.log('✅ Method 2: Found user via clientId field');
+      console.log('✅ Method 2: Found user via clientId field:', userByClientId._id);
       return userByClientId._id;
     }
     
-    // Method 3: Find user by clientInfo._id
-    const userByClientInfo = await User.findOne({ 
-      'clientInfo._id': mongoose.Types.ObjectId(clientId),
-      role: 'client'
-    });
-    if (userByClientInfo) {
-      console.log('✅ Method 3: Found user via clientInfo._id');
-      return userByClientInfo._id;
-    }
-    
-    // Method 4: Find by email matching
+    // Method 3: Find by email matching
     const client = await Client.findById(clientId);
     if (client && client.email) {
       const userByEmail = await User.findOne({ 
-        email: client.email, 
+        email: client.email.toLowerCase(), 
         role: 'client' 
       });
       if (userByEmail) {
-        console.log('✅ Method 4: Found user via email matching');
+        console.log('✅ Method 3: Found user via email matching:', userByEmail._id);
         return userByEmail._id;
+      }
+    }
+    
+    // Method 4: Search in all client users
+    if (client) {
+      const allClientUsers = await User.find({ role: 'client' }).select('_id email clientId');
+      const matchingUser = allClientUsers.find(user => 
+        user.clientId?.toString() === clientId ||
+        user.email === client.email
+      );
+      
+      if (matchingUser) {
+        console.log('✅ Method 4: Found user via comprehensive search:', matchingUser._id);
+        return matchingUser._id;
       }
     }
     
@@ -196,12 +200,11 @@ const sendMessage = async (req, res) => {
       recipient, 
       subject, 
       messageType,
-      clientId: req.user.clientId,
-      employeeId: req.user.employeeId,
+      priority,
       clientParam: client
     });
 
-    // Validation
+    // Enhanced validation
     if (!subject || !message) {
       return res.status(400).json({
         success: false,
@@ -209,22 +212,58 @@ const sendMessage = async (req, res) => {
       });
     }
 
-    if (subject.trim().length === 0 || message.trim().length === 0) {
+    const trimmedSubject = subject.trim();
+    const trimmedMessage = message.trim();
+
+    if (!trimmedSubject || !trimmedMessage) {
       return res.status(400).json({
         success: false,
         message: 'Subject and message cannot be empty'
       });
     }
 
+    if (trimmedSubject.length < 3) {
+      return res.status(400).json({
+        success: false,
+        message: 'Subject must be at least 3 characters long'
+      });
+    }
+
+    if (trimmedMessage.length < 10) {
+      return res.status(400).json({
+        success: false,
+        message: 'Message must be at least 10 characters long'
+      });
+    }
+
     // Auto-determine recipient if not provided
     let recipientId = recipient;
-    
+    let clientIdForMessage = null;
+
+    // Handle special case where frontend couldn't find client user
+    if (recipientId === 'CLIENT_USER_TO_BE_FOUND' && client) {
+      console.log('🔍 Backend: Finding client user for client ID:', client);
+      const clientUserId = await findClientUser(client);
+      if (clientUserId) {
+        recipientId = clientUserId;
+        clientIdForMessage = client;
+        console.log('✅ Backend: Found client user:', recipientId);
+      } else {
+        return res.status(404).json({
+          success: false,
+          message: 'Client user account not found. Please contact admin to create a user account for this client.',
+          details: 'The client may not have a linked user account in the system.'
+        });
+      }
+    }
+
+    // Find admin if recipient not specified
     if (!recipientId || !mongoose.Types.ObjectId.isValid(recipientId)) {
-      // For CLIENT and EMPLOYEE sending to ADMIN
       if ((req.user.role === 'client' || req.user.role === 'employee') && !client) {
         console.log(`🔍 Looking for admin user for ${req.user.role}...`);
         const adminUser = await User.findOne({ 
-          role: 'admin'
+          role: 'admin',
+          isActive: true 
         }).select('_id name email');
         
         if (adminUser) {
@@ -245,77 +284,97 @@ const sendMessage = async (req, res) => {
       }
     }
 
-    // Handle special case where frontend couldn't find client user
-    if (recipientId === 'CLIENT_USER_TO_BE_FOUND' && client) {
-      console.log('🔍 Backend: Finding client user for client ID:', client);
-      const clientUserId = await findClientUser(client);
-      if (clientUserId) {
-        recipientId = clientUserId;
-        console.log('✅ Backend: Found client user:', recipientId);
-      } else {
-        return res.status(404).json({
-          success: false,
-          message: 'Client user account not found. Please contact admin to create a user account for this client.'
-        });
-      }
-    }
-
-    // If client ID is provided (employee messaging client), find client's user
-    if (client && mongoose.Types.ObjectId.isValid(client)) {
-      console.log('🔍 Finding client user for client ID:', client);
+    // Handle employee messaging client
+    if (client && mongoose.Types.ObjectId.isValid(client) && req.user.role === 'employee') {
+      console.log('🔍 Employee messaging client - Finding client user for ID:', client);
       const clientUserId = await findClientUser(client);
       
       if (clientUserId) {
         recipientId = clientUserId;
+        clientIdForMessage = client;
         console.log('✅ Found client user ID:', recipientId);
       } else {
         return res.status(404).json({
           success: false,
-          message: 'Client user not found or client does not have a user account'
+          message: 'Client user not found or client does not have a user account',
+          details: 'Please ask admin to create a user account for this client.'
         });
       }
     }
 
-    // Verify recipient exists
-    const recipientUser = await User.findById(recipientId);
+    // Verify recipient exists and is active
+    const recipientUser = await User.findOne({ 
+      _id: recipientId,
+      isActive: true 
+    });
+    
     if (!recipientUser) {
       return res.status(404).json({
         success: false,
-        message: 'Recipient user not found'
+        message: 'Recipient user not found or inactive'
       });
     }
 
-    // Determine client ID for message
-    let clientIdForMessage = client;
+    // Determine client ID for message context
     if (req.user.role === 'client' && req.user.clientId) {
       clientIdForMessage = req.user.clientId;
       console.log('🏢 Using client ID from user:', clientIdForMessage);
     }
 
-    console.log('🔨 Creating message with data:', {
+    // Validate message type
+    const validMessageTypes = [
+      'general', 'support', 'project-update', 'leave-request', 
+      'project-status', 'clarification', 'delivery', 'urgent'
+    ];
+    
+    if (!validMessageTypes.includes(messageType)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid message type'
+      });
+    }
+
+    // Validate priority
+    const validPriorities = ['low', 'medium', 'high'];
+    if (!validPriorities.includes(priority)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid priority level'
+      });
+    }
+
+    console.log('🔨 Creating message with validated data:', {
       sender: req.user._id,
       senderRole: req.user.role,
       recipient: recipientId,
       recipientRole: recipientUser.role,
       client: clientIdForMessage,
-      subject: subject.trim(),
+      subject: trimmedSubject,
       messageType,
       priority
     });
 
-    // Create new message
-    const newMessage = new Message({
+    // Create new message with proper validation
+    const messageData = {
       sender: req.user._id,
       recipient: recipientId,
-      client: clientIdForMessage || undefined,
-      project: project || undefined,
-      subject: subject.trim(),
-      message: message.trim(),
+      subject: trimmedSubject,
+      message: trimmedMessage,
       messageType,
       priority,
       status: 'unread'
-    });
+    };
 
+    // Add optional fields only if they have valid values
+    if (clientIdForMessage && mongoose.Types.ObjectId.isValid(clientIdForMessage)) {
+      messageData.client = clientIdForMessage;
+    }
+
+    if (project && mongoose.Types.ObjectId.isValid(project)) {
+      messageData.project = project;
+    }
+
+    const newMessage = new Message(messageData);
     const savedMessage = await newMessage.save();
     console.log('✅ Message saved with ID:', savedMessage._id);
     
@@ -333,6 +392,7 @@ const sendMessage = async (req, res) => {
       message: 'Message sent successfully', 
       data: populatedMessage
     });
+
   } catch (error) {
     console.error('❌ Send message error:', error);
     
@@ -341,15 +401,25 @@ const sendMessage = async (req, res) => {
       const validationErrors = Object.values(error.errors).map(err => err.message);
       return res.status(400).json({
         success: false,
-        message: 'Validation failed',
-        errors: validationErrors
+        message: 'Message validation failed',
+        errors: validationErrors,
+        details: 'Please check all required fields and try again'
+      });
+    }
+
+    // Handle cast errors (invalid ObjectId)
+    if (error.name === 'CastError') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid data format provided',
+        details: error.message
       });
     }
     
     res.status(500).json({ 
       success: false, 
       message: 'Failed to send message', 
-      error: error.message 
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
   }
 };

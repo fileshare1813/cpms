@@ -1,80 +1,73 @@
 const mongoose = require('mongoose');
 
 const messageSchema = new mongoose.Schema({
-  messageId: {
-    type: String,
-    unique: true
-  },
-  sender: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+  sender: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'User', 
     required: [true, 'Sender is required']
   },
-  recipient: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+  recipient: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'User', 
     required: [true, 'Recipient is required']
   },
-  client: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Client'
-  },
-  project: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Project'
-  },
-  subject: {
-    type: String,
+  subject: { 
+    type: String, 
     required: [true, 'Subject is required'],
     trim: true,
+    minlength: [3, 'Subject must be at least 3 characters'],
     maxlength: [200, 'Subject cannot exceed 200 characters']
   },
-  message: {
-    type: String,
+  message: { 
+    type: String, 
     required: [true, 'Message content is required'],
     trim: true,
+    minlength: [10, 'Message must be at least 10 characters'],
     maxlength: [5000, 'Message cannot exceed 5000 characters']
   },
-  messageType: {
-    type: String,
+  messageType: { 
+    type: String, 
     enum: {
-      values: ['general', 'support', 'project-update', 'payment', 'urgent'],
-      message: 'Message type must be one of: general, support, project-update, payment, urgent'
+      values: ['general', 'support', 'project-update', 'leave-request', 'project-status', 'clarification', 'delivery', 'urgent'],
+      message: 'Invalid message type'
     },
-    default: 'general'
+    default: 'general' 
   },
-  priority: {
-    type: String,
+  priority: { 
+    type: String, 
     enum: {
       values: ['low', 'medium', 'high'],
       message: 'Priority must be low, medium, or high'
     },
-    default: 'medium'
+    default: 'medium' 
   },
-  status: {
-    type: String,
+  status: { 
+    type: String, 
     enum: {
       values: ['unread', 'read', 'replied'],
-      message: 'Status must be unread, read, or replied'
+      message: 'Invalid message status'
     },
-    default: 'unread'
+    default: 'unread' 
   },
-  attachments: [{
-    filename: { type: String, required: true },
-    originalName: { type: String, required: true },
-    mimetype: { type: String, required: true },
-    size: { type: Number, required: true },
-    path: { type: String, required: true }
-  }],
-  readAt: {
-    type: Date
+  client: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'Client'
+    // Made optional - not required for all messages
   },
-  repliedAt: {
-    type: Date
+  project: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'Project'
+    // Made optional - not required for all messages
   },
-  replyTo: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Message'
+  replyTo: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'Message' 
+  },
+  readAt: { 
+    type: Date 
+  },
+  repliedAt: { 
+    type: Date 
   }
 }, {
   timestamps: true,
@@ -89,18 +82,8 @@ messageSchema.index({ client: 1, createdAt: -1 });
 messageSchema.index({ status: 1 });
 messageSchema.index({ messageType: 1 });
 
-// Pre-save middleware to generate unique message ID
-messageSchema.pre('save', async function(next) {
-  try {
-    if (!this.messageId) {
-      const count = await this.constructor.countDocuments();
-      this.messageId = `MSG${String(count + 1).padStart(6, '0')}`;
-    }
-    next();
-  } catch (error) {
-    next(error);
-  }
-});
+// REMOVED: Pre-save middleware that was causing the duplicate key error
+// The MongoDB _id field already serves as a unique identifier
 
 // Virtual for message thread
 messageSchema.virtual('isReply').get(function() {
@@ -110,6 +93,11 @@ messageSchema.virtual('isReply').get(function() {
 // Virtual for formatted date
 messageSchema.virtual('formattedDate').get(function() {
   return this.createdAt.toLocaleDateString('en-IN');
+});
+
+// Virtual for display ID (using the MongoDB _id instead of custom messageId)
+messageSchema.virtual('displayId').get(function() {
+  return this._id.toString().slice(-6).toUpperCase();
 });
 
 // Static method to get unread count for user

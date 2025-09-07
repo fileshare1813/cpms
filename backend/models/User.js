@@ -30,23 +30,30 @@ const userSchema = new mongoose.Schema({
     },
     default: 'admin' 
   },
+  // FIXED: Made clientId optional initially, will be updated after client creation
   clientId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Client',
     required: function() { 
-      return this.role === 'client'; 
+      return this.role === 'client' && this.isModified('clientId'); 
     }
   },
   employeeId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Employee',
     required: function() { 
-      return this.role === 'employee'; 
+      return this.role === 'employee' && this.isModified('employeeId'); 
     }
   },
   isActive: {
     type: Boolean,
     default: true
+  },
+  // ADDED: Additional fields for better client-user linking
+  clientInfo: {
+    _id: { type: mongoose.Schema.Types.ObjectId, ref: 'Client' },
+    companyName: String,
+    clientId: String
   }
 }, {
   timestamps: true,
@@ -57,6 +64,8 @@ const userSchema = new mongoose.Schema({
 // Index for better performance
 userSchema.index({ email: 1 });
 userSchema.index({ role: 1 });
+userSchema.index({ clientId: 1 });
+userSchema.index({ 'clientInfo._id': 1 });
 
 // Hash password before saving
 userSchema.pre('save', async function(next) {

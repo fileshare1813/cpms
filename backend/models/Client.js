@@ -1,9 +1,12 @@
+// backend/models/Client.js
+// FIXED: Enhanced clientId generation to avoid duplicates
+
 const mongoose = require('mongoose');
 
 const clientSchema = new mongoose.Schema({
   clientId: { 
     type: String, 
-    unique: true,
+    unique: true
     // REMOVED: required: true - Let pre-save middleware handle this
   },
   user: {
@@ -106,21 +109,56 @@ clientSchema.index({ email: 1 });
 clientSchema.index({ clientId: 1 });
 clientSchema.index({ companyName: 1 });
 
-// FIXED: Pre-save middleware to generate unique client ID
+// FIXED: Enhanced pre-save middleware with proper duplicate handling
 clientSchema.pre('save', async function(next) {
   try {
     // Only generate clientId if it doesn't exist (new document)
     if (!this.clientId || this.clientId === '') {
-      console.log('🔄 Generating clientId for new client...');
+      console.log('🔄 Generating unique clientId for new client...');
       
-      // Get count of existing clients
       const ClientModel = this.constructor;
-      const count = await ClientModel.countDocuments();
+      let attempts = 0;
+      const maxAttempts = 10;
       
-      // Generate unique clientId
-      this.clientId = `CL${String(count + 1).padStart(4, '0')}`;
+      while (attempts < maxAttempts) {
+        try {
+          // Get the highest existing clientId number
+          const lastClient = await ClientModel.findOne({}, { clientId: 1 })
+            .sort({ clientId: -1 })
+            .limit(1);
+          
+          let nextNumber = 1;
+          if (lastClient && lastClient.clientId) {
+            // Extract number from clientId (e.g., "CL0005" -> 5)
+            const match = lastClient.clientId.match(/CL(\d+)/);
+            if (match) {
+              nextNumber = parseInt(match[1]) + 1;
+            }
+          }
+          
+          // Generate new clientId
+          const newClientId = `CL${String(nextNumber).padStart(4, '0')}`;
+          console.log(`🔄 Attempt ${attempts + 1}: Trying clientId: ${newClientId}`);
+          
+          // Check if this clientId already exists
+          const existingClient = await ClientModel.findOne({ clientId: newClientId });
+          if (!existingClient) {
+            this.clientId = newClientId;
+            console.log('✅ Generated unique clientId:', this.clientId);
+            break;
+          } else {
+            console.log(`⚠️ ClientId ${newClientId} already exists, trying next...`);
+            attempts++;
+          }
+        } catch (checkError) {
+          console.error('❌ Error checking clientId uniqueness:', checkError);
+          attempts++;
+        }
+      }
       
-      console.log('✅ Generated clientId:', this.clientId);
+      if (attempts >= maxAttempts) {
+        throw new Error('Failed to generate unique clientId after multiple attempts');
+      }
     }
     
     // Ensure email is lowercase
@@ -148,6 +186,40 @@ clientSchema.pre('save', async function(next) {
   }
 });
 
+// ADDED: Alternative method for generating clientId if pre-save fails
+clientSchema.statics.generateUniqueClientId = async function() {
+  try {
+    console.log('🔄 Using alternative clientId generation method...');
+    
+    let attempts = 0;
+    const maxAttempts = 20;
+    
+    while (attempts < maxAttempts) {
+      // Generate random number to avoid conflicts
+      const randomNum = Math.floor(Math.random() * 9000) + 1000; // 1000-9999
+      const clientId = `CL${randomNum}`;
+      
+      const existing = await this.findOne({ clientId });
+      if (!existing) {
+        console.log('✅ Alternative method generated unique clientId:', clientId);
+        return clientId;
+      }
+      
+      attempts++;
+    }
+    
+    // Last resort: use timestamp
+    const timestamp = Date.now().toString().slice(-4);
+    const fallbackClientId = `CL${timestamp}`;
+    console.log('⚠️ Using timestamp fallback clientId:', fallbackClientId);
+    return fallbackClientId;
+    
+  } catch (error) {
+    console.error('❌ Alternative clientId generation failed:', error);
+    throw error;
+  }
+};
+
 // Post-save middleware for logging
 clientSchema.post('save', function(doc) {
   console.log('✅ Client saved successfully with ID:', doc.clientId);
@@ -165,12 +237,17 @@ clientSchema.statics.findByClientId = function(clientId) {
 
 // Instance method to check if client has active projects
 clientSchema.methods.hasActiveProjects = async function() {
-  const Project = mongoose.model('Project');
-  const count = await Project.countDocuments({ 
-    client: this._id, 
-    status: { $in: ['planning', 'in-progress'] } 
-  });
-  return count > 0;
+  try {
+    const Project = mongoose.model('Project');
+    const count = await Project.countDocuments({ 
+      client: this._id, 
+      status: { $in: ['planning', 'in-progress'] } 
+    });
+    return count > 0;
+  } catch (error) {
+    console.error('Error checking active projects:', error);
+    return false;
+  }
 };
 
 module.exports = mongoose.model('Client', clientSchema);
